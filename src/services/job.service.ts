@@ -32,6 +32,23 @@ export class JobService {
   }
 
   /**
+   * Generates a mock AI baseline for a job.
+   */
+  static generateAiBaseline(title: string) {
+    // In a real system, this would call Gemini/OpenAI
+    return {
+      technical_depth: `Exceptional proficiency in ${title.includes('AI') ? 'Neural Networks and LLM architecture' : 'modern development frameworks'}. Should demonstrate a track record of building scalable production systems.`,
+      industry_fit: `Deep understanding of ${title.includes('AI') ? 'AI/ML research labs and tech-first companies' : 'fast-paced agile environments'}. Proven ability to adapt to industry-specific security and performance standards.`,
+      precision: 82 + Math.floor(Math.random() * 10),
+      market_intelligence: {
+        avg_salary: "$140k - $190k",
+        availability: "Low",
+        time_to_hire: "24 Days"
+      }
+    };
+  }
+
+  /**
    * Creates a new job posting for an organization.
    */
   static async createJob(organizationId: string, userId: string, data: CreateJobDTO) {
@@ -40,6 +57,9 @@ export class JobService {
     
     // Generate a unique public URL slug
     const publicUrlSlug = `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`;
+
+    // Generate AI Baseline
+    const aiBaseline = this.generateAiBaseline(data.title);
 
     const { data: newJob, error } = await supabase
       .from('jobs')
@@ -54,6 +74,7 @@ export class JobService {
           public_code: publicCode,
           public_url: publicUrlSlug,
           created_by: userId,
+          ai_baseline: aiBaseline,
         },
       ])
       .select()

@@ -1,9 +1,13 @@
 import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
+import { AuditService } from './audit.service';
+import { EmailService } from './email.service';
 
 export interface CreateInterviewTypeDTO {
   name: string;
   durationMinutes: number;
+  createdByAi?: boolean;
+  userId?: string;
 }
 
 export interface ScheduleInterviewDTO {
@@ -27,6 +31,8 @@ export class InterviewService {
           organization_id: organizationId,
           name: data.name,
           duration_minutes: data.durationMinutes,
+          created_by_ai: data.createdByAi || false,
+          user_id: data.userId,
         },
       ])
       .select()
@@ -54,7 +60,7 @@ export class InterviewService {
   /**
    * INTERVIEWS (SCHEDULING)
    */
-  static async scheduleInterview(organizationId: string, userId: string, data: ScheduleInterviewDTO) {
+  static async scheduleInterview(organizationId: string, userId: string | null, data: ScheduleInterviewDTO) {
     // 1. Verify Applicant belongs to Organization
     const { data: applicant, error: applicantError } = await supabase
       .from('applicants')
@@ -68,6 +74,8 @@ export class InterviewService {
     }
 
     // 2. Schedule Interview
+    const scheduledBy = userId ? 'USER' : 'AI';
+
     const { data: newInterview, error: interviewError } = await supabase
       .from('interviews')
       .insert([
@@ -78,7 +86,7 @@ export class InterviewService {
           start_time: data.startTime,
           end_time: data.endTime,
           meet_url: data.meetUrl,
-          scheduled_by: 'USER',
+          scheduled_by: scheduledBy,
           created_by: userId,
         },
       ])
@@ -92,6 +100,27 @@ export class InterviewService {
     // 3. Update Applicant Status to INTERVIEWING
     await supabase.from('applicants').update({ status: 'INTERVIEWING' }).eq('id', data.applicantId);
 
+    // 4. Log Email Notification
+    const { data: fullApplicant } = await supabase.from('applicants').select('name, email').eq('id', data.applicantId).single();
+    if (fullApplicant) {
+      await EmailService.logEmail({
+        organizationId,
+        recipientEmail: fullApplicant.email,
+        subject: `Interview Invitation: ${fullApplicant.name}`,
+        body: `Dear ${fullApplicant.name},\n\nYour interview has been scheduled for ${data.scheduledDate} at ${data.startTime}. Meet URL: ${data.meetUrl || 'TBD'}`,
+        sentByAi: scheduledBy === 'AI',
+        userId: userId || undefined
+      });
+    }
+
+    // 5. Log Activity
+    await AuditService.logActivity({
+      organizationId,
+      userId,
+      actionType: 'Interview Scheduled',
+      description: `Interview scheduled for applicant ${fullApplicant?.name || data.applicantId} (${scheduledBy})`,
+    });
+
     return newInterview;
   }
 
@@ -101,7 +130,7 @@ export class InterviewService {
       .from('interviews')
       .select(`
         *,
-        applicants!inner(name, email, jobs!inner(organization_id)),
+        applicants!inner(name, email, jobs!inner(title, organization_id)),
         interview_types(name, duration_minutes)
       `)
       .eq('applicants.jobs.organization_id', organizationId)

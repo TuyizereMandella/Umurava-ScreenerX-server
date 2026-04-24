@@ -72,3 +72,23 @@ export const getJob = async (req: Request, res: Response, next: NextFunction) =>
     next(error);
   }
 };
+
+export const generateBaseline = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { title } = req.body;
+    if (!title) {
+      return next(new AppError('Job title is required', 400));
+    }
+
+    const baseline = JobService.generateAiBaseline(title);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        baseline,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

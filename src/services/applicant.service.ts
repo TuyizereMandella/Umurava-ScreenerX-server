@@ -1,5 +1,8 @@
 import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
+import { NotificationService } from './notification.service';
+import { InterviewService } from './interview.service';
+import { AuditService } from './audit.service';
 
 export interface CreateApplicantDTO {
   jobId: string;
@@ -16,7 +19,7 @@ export class ApplicantService {
     // 1. Verify Job exists and is public
     const { data: job, error: jobError } = await supabase
       .from('jobs')
-      .select('id, organization_id')
+      .select('id, organization_id, title')
       .eq('id', data.jobId)
       .eq('is_public', true)
       .is('deleted_at', null)
@@ -48,6 +51,21 @@ export class ApplicantService {
       throw new AppError(`Failed to submit application: ${applicantError.message}`, 500);
     }
 
+    // 3. Create Notification
+    await NotificationService.createNotification({
+      organizationId: job.organization_id,
+      type: 'info',
+      title: 'New Applicant',
+      message: `${data.name} applied for the position.`,
+    });
+
+    // 4. Log Activity
+    await AuditService.logActivity({
+      organizationId: job.organization_id,
+      actionType: 'Candidate Applied',
+      description: `Applicant ${data.name} submitted an application for ${job.title}`,
+    });
+
     return newApplicant;
   }
 
@@ -59,7 +77,8 @@ export class ApplicantService {
       .from('applicants')
       .select(`
         *,
-        jobs!inner(id, title, organization_id)
+        jobs!inner(id, title, organization_id),
+        ai_analysis(*)
       `)
       .eq('jobs.organization_id', organizationId)
       .is('deleted_at', null)
@@ -147,6 +166,77 @@ export class ApplicantService {
     
     // Update the cached match score on the applicant
     await supabase.from('applicants').update({ match_score: 90 }).eq('id', applicantId);
+
+    // Fetch applicant to get organization_id
+    const { data: applicant } = await supabase
+      .from('applicants')
+      .select('name, jobs(organization_id, title)')
+      .eq('id', applicantId)
+      .single();
+
+    if (applicant && applicant.jobs) {
+      const organizationId = (applicant.jobs as any).organization_id;
+
+      await NotificationService.createNotification({
+        organizationId,
+        type: 'success',
+        title: 'AI Screening Completed',
+        message: `Analysis finished for ${applicant.name}. Match score updated.`,
+      });
+
+      const matchScore = 90; // Our mocked score
+
+      await AuditService.logActivity({
+        organizationId,
+        actionType: 'AI Screening Completed',
+        description: `ScreenerX AI completed evaluation for ${applicant.name}. Score: ${matchScore}%`,
+      });
+      if (matchScore >= 85) {
+        // Find or create AI Technical Screen type
+        let { data: types } = await supabase
+          .from('interview_types')
+          .select('id')
+          .eq('organization_id', organizationId)
+          .eq('name', 'AI Technical Screen')
+          .limit(1);
+
+        let interviewTypeId;
+        
+        if (!types || types.length === 0) {
+           const { data: newType } = await supabase
+             .from('interview_types')
+             .insert([{ organization_id: organizationId, name: 'AI Technical Screen', duration_minutes: 45 }])
+             .select()
+             .single();
+           if (newType) interviewTypeId = newType.id;
+        } else {
+           interviewTypeId = types[0].id;
+        }
+
+        if (interviewTypeId) {
+          // Schedule 2 days from now at 10 AM
+          const date = new Date();
+          date.setDate(date.getDate() + 2);
+          const scheduledDate = date.toISOString().split('T')[0];
+
+          await InterviewService.scheduleInterview(organizationId, null, {
+             applicantId: applicantId,
+             interviewTypeId,
+             scheduledDate,
+             startTime: '10:00:00',
+             endTime: '10:45:00',
+             meetUrl: 'https://meet.google.com/ai-screen-mock'
+          });
+
+          await NotificationService.createNotification({
+            organizationId,
+            type: 'calendar',
+            title: 'AI Auto-Scheduled Interview',
+            message: `An interview was automatically scheduled for ${applicant.name} on ${scheduledDate}.`,
+          });
+        }
+      }
+    }
 
     return data;
   }

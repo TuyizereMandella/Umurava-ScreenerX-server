@@ -72,6 +72,37 @@ export class AuthService {
   }
 
   /**
+   * Updates the password hash for a user.
+   */
+  static async updatePassword(userId: string, newPasswordHash: string) {
+    const { error } = await supabase
+      .from('users')
+      .update({ password_hash: newPasswordHash })
+      .eq('id', userId);
+
+    if (error) {
+      throw new AppError(`Failed to update password: ${error.message}`, 500);
+    }
+  }
+
+  /**
+   * Fetches a user by ID.
+   */
+  static async getUserById(userId: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      throw new AppError(`Failed to fetch user: ${error.message}`, 500);
+    }
+
+    return data;
+  }
+
+  /**
    * Updates the last_login timestamp for a user.
    */
   static async updateLastLogin(userId: string) {

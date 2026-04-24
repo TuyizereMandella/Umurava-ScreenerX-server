@@ -102,3 +102,36 @@ export const login = async (
     next(error);
   }
 };
+
+export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user!.userId;
+
+    if (!currentPassword || !newPassword) {
+      return next(new AppError('Please provide current and new password', 400));
+    }
+
+    // 1) Get user
+    const user = await AuthService.getUserById(userId);
+
+    // 2) Check if current password is correct
+    const isCorrect = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isCorrect) {
+      return next(new AppError('Current password is incorrect', 401));
+    }
+
+    // 3) Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    // 4) Update password
+    await AuthService.updatePassword(userId, newPasswordHash);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Password updated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
