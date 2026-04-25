@@ -4,9 +4,9 @@ import { AppError } from '../utils/AppError';
 import { supabase } from '../config/supabase';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-2.0-flash') {
+  private static getModel(modelName = 'gemini-1.5-pro-latest') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    // Switching to Gemini 2.0 Flash as requested; ensuring v1beta is used
+    // Switching to 1.5 Pro for maximum reliability as Flash is hitting quota/404 issues
     return genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
   }
 
