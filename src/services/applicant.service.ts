@@ -237,16 +237,16 @@ export class ApplicantService {
     }
     
     // ---- Deep Multi-Factor Shortlisting Decision ----
-    const matchScore = aiResult.match_score || 80;
-    const fitScore = aiResult.algorithmic_fit_score || 0;
-    const archScore = aiResult.architecture_score || 0;
+    const matchScore = aiResult.match_score ?? 0;
+    const fitScore = aiResult.algorithmic_fit_score ?? 0;
+    const archScore = aiResult.architecture_score ?? 0;
     const overallScore = matchScore;
     const gaps: string[] = aiResult.gaps || [];
 
-    // A candidate is SHORTLISTED if they pass all three dimensions
-    const isShortlisted = overallScore >= 75 && fitScore >= 70 && archScore >= 65;
+    // A candidate is SHORTLISTED if they pass all three dimensions (Relaxed thresholds)
+    const isShortlisted = overallScore >= 70 && fitScore >= 60 && archScore >= 60;
     // A candidate is REJECTED if they score critically low or the AI flagged severe gaps
-    const isRejected = overallScore < 50 || (overallScore < 65 && gaps.length >= 2);
+    const isRejected = overallScore < 40 || (overallScore < 60 && gaps.length >= 3);
 
     let newStatus: 'SHORTLISTED' | 'REJECTED' | 'NEW' = 'NEW';
     if (isShortlisted) newStatus = 'SHORTLISTED';
