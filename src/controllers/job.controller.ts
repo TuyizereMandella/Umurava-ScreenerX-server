@@ -80,7 +80,7 @@ export const generateBaseline = async (req: Request, res: Response, next: NextFu
       return next(new AppError('Job title is required', 400));
     }
 
-    const baseline = JobService.generateAiBaseline(title);
+    const baseline = await JobService.generateAiBaseline(title);
 
     res.status(200).json({
       status: 'success',

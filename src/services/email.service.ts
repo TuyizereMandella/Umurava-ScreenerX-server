@@ -1,5 +1,7 @@
 import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
+import { Resend } from 'resend';
+import { config } from '../config/env';
 
 export interface LogEmailDTO {
   organizationId: string;
@@ -11,6 +13,30 @@ export interface LogEmailDTO {
 }
 
 export class EmailService {
+  private static resend = new Resend(config.resendApiKey);
+
+  /**
+   * Sends an email via Resend and logs it to the database.
+   */
+  static async sendAndLogEmail(data: LogEmailDTO) {
+    try {
+      if (config.resendApiKey && config.resendApiKey !== 'placeholder-resend-key-replace-me') {
+        await this.resend.emails.send({
+          from: 'ScreenerX <onboarding@resend.dev>', // Use default Resend test domain
+          to: data.recipientEmail,
+          subject: data.subject,
+          text: data.body,
+        });
+      } else {
+        console.warn('Resend API key not set or is placeholder, skipping real email send.');
+      }
+    } catch (e) {
+      console.error('Failed to send email via Resend:', e);
+    }
+
+    // Always log the attempt
+    await this.logEmail(data);
+  }
   /**
    * Logs a sent email to the database.
    */

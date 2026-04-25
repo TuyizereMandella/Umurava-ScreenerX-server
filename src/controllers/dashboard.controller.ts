@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
+import { GeminiService } from '../services/gemini.service';
 
 export const getAiInsight = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -16,20 +17,18 @@ export const getAiInsight = async (req: Request, res: Response, next: NextFuncti
 
     const { count: totalApplicants } = await supabase
       .from('applicants')
-      .select('*', { count: 'exact', head: true })
+      .select('id, jobs!inner(organization_id)', { count: 'exact', head: true })
       .eq('jobs.organization_id', organizationId);
 
     const jobTitle = jobs && jobs.length > 0 ? jobs[0].title : 'your roles';
     
-    // Mocking AI "thinking" based on real counts
-    const insights = [
-      `Candidates for '${jobTitle}' are showing strong proficiency in modern frameworks. Consider shortening the technical round to increase conversion.`,
-      `We noticed a 15% uptick in applications for '${jobTitle}' this week. The market supply for this role is currently high.`,
-      `Your '${jobTitle}' pipeline has ${totalApplicants || 0} candidates. AI analysis suggests 3 of them are 'Ready for Technical Interview'.`,
-      `High-performing candidates for '${jobTitle}' are frequently mentioning 'remote flexibility' in their resumes. Consider highlighting this more.`
-    ];
+    const orgContext = {
+      jobCount: jobs ? jobs.length : 0,
+      totalApplicants: totalApplicants || 0,
+      topJobTitle: jobTitle
+    };
 
-    const randomInsight = insights[Math.floor(Math.random() * insights.length)];
+    const randomInsight = await GeminiService.generateDashboardInsight(orgContext);
 
     res.status(200).json({
       status: 'success',

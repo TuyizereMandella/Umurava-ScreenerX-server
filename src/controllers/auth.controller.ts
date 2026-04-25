@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { AuthService } from '../services/auth.service';
 import { AppError } from '../utils/AppError';
 import { signToken } from '../utils/jwt';
+import { supabase } from '../config/supabase';
 
 export const signup = async (
   req: Request,
@@ -130,6 +131,36 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     res.status(200).json({
       status: 'success',
       message: 'Password updated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMe = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const user = await AuthService.getUserById(userId);
+    
+    // Fetch org from Supabase using the already-imported client
+    const { data: organization, error: orgError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', user.organization_id)
+      .single();
+      
+    if (orgError) {
+      return next(new AppError('Organization not found', 404));
+    }
+    
+    user.password_hash = undefined;
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        user,
+        organization
+      },
     });
   } catch (error) {
     next(error);

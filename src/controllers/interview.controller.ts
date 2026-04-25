@@ -33,7 +33,7 @@ export const getInterviewTypes = async (req: Request, res: Response, next: NextF
       status: 'success',
       results: interviewTypes.length,
       data: {
-        interviewTypes,
+        types: interviewTypes,
       },
     });
   } catch (error) {

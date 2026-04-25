@@ -3,6 +3,7 @@ import { AppError } from '../utils/AppError';
 import { NotificationService } from './notification.service';
 import { InterviewService } from './interview.service';
 import { AuditService } from './audit.service';
+import { GeminiService } from './gemini.service';
 
 export interface CreateApplicantDTO {
   jobId: string;
@@ -127,11 +128,9 @@ export class ApplicantService {
   }
 
   /**
-   * Triggers the mock AI Analysis for an applicant.
+   * Triggers live Gemini AI Analysis for an applicant.
    */
   static async triggerAnalysis(applicantId: string) {
-    // In a real scenario, this would call Gemini API and process the resume text.
-    // For now, we mock the Gemini response based on the frontend structure.
     
     // Check if analysis already exists
     const { data: existing } = await supabase
@@ -144,19 +143,39 @@ export class ApplicantService {
        throw new AppError('Analysis already completed for this candidate.', 400);
     }
 
-    const mockAnalysis = {
+    // Fetch applicant to get name and job details
+    const { data: applicantInfo } = await supabase
+      .from('applicants')
+      .select('name, jobs(organization_id, title)')
+      .eq('id', applicantId)
+      .single();
+
+    if (!applicantInfo || !applicantInfo.jobs) {
+      throw new AppError('Applicant or Job not found for analysis', 404);
+    }
+    
+    const organizationId = (applicantInfo.jobs as any).organization_id;
+
+    // Call real Gemini API
+    const aiResult = await GeminiService.analyzeResume(
+      applicantInfo.name, 
+      (applicantInfo.jobs as any).title, 
+      []
+    );
+
+    const analysisPayload = {
       applicant_id: applicantId,
-      technical_dna: ['React', 'Node.js', 'System Architecture'],
-      algorithmic_fit_score: 88,
-      architecture_score: 92,
-      strengths: ['Strong background in distributed systems', 'Excellent problem-solving skills'],
-      gaps: ['Limited experience with Rust'],
-      recommendation_summary: 'Highly recommended for the technical team. Good fit.'
+      technical_dna: aiResult.technical_dna,
+      algorithmic_fit_score: aiResult.algorithmic_fit_score,
+      architecture_score: aiResult.architecture_score,
+      strengths: aiResult.strengths,
+      gaps: aiResult.gaps,
+      recommendation_summary: aiResult.recommendation_summary
     };
 
     const { data, error } = await supabase
       .from('ai_analysis')
-      .insert([mockAnalysis])
+      .insert([analysisPayload])
       .select()
       .single();
 
@@ -164,32 +183,23 @@ export class ApplicantService {
       throw new AppError(`Failed to generate analysis: ${error.message}`, 500);
     }
     
+    const matchScore = aiResult.match_score || 80;
+    
     // Update the cached match score on the applicant
-    await supabase.from('applicants').update({ match_score: 90 }).eq('id', applicantId);
+    await supabase.from('applicants').update({ match_score: matchScore }).eq('id', applicantId);
 
-    // Fetch applicant to get organization_id
-    const { data: applicant } = await supabase
-      .from('applicants')
-      .select('name, jobs(organization_id, title)')
-      .eq('id', applicantId)
-      .single();
-
-    if (applicant && applicant.jobs) {
-      const organizationId = (applicant.jobs as any).organization_id;
-
+    if (applicantInfo && applicantInfo.jobs) {
       await NotificationService.createNotification({
         organizationId,
         type: 'success',
         title: 'AI Screening Completed',
-        message: `Analysis finished for ${applicant.name}. Match score updated.`,
+        message: `Analysis finished for ${applicantInfo.name}. Match score updated.`,
       });
-
-      const matchScore = 90; // Our mocked score
 
       await AuditService.logActivity({
         organizationId,
         actionType: 'AI Screening Completed',
-        description: `ScreenerX AI completed evaluation for ${applicant.name}. Score: ${matchScore}%`,
+        description: `ScreenerX AI completed evaluation for ${applicantInfo.name}. Score: ${matchScore}%`,
       });
       if (matchScore >= 85) {
         // Find or create AI Technical Screen type
@@ -232,7 +242,7 @@ export class ApplicantService {
             organizationId,
             type: 'calendar',
             title: 'AI Auto-Scheduled Interview',
-            message: `An interview was automatically scheduled for ${applicant.name} on ${scheduledDate}.`,
+            message: `An interview was automatically scheduled for ${applicantInfo.name} on ${scheduledDate}.`,
           });
         }
       }

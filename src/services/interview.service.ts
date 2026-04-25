@@ -102,8 +102,8 @@ export class InterviewService {
 
     // 4. Log Email Notification
     const { data: fullApplicant } = await supabase.from('applicants').select('name, email').eq('id', data.applicantId).single();
-    if (fullApplicant) {
-      await EmailService.logEmail({
+    if (fullApplicant && fullApplicant.email) {
+      await EmailService.sendAndLogEmail({
         organizationId,
         recipientEmail: fullApplicant.email,
         subject: `Interview Invitation: ${fullApplicant.name}`,
