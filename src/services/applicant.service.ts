@@ -137,7 +137,7 @@ export class ApplicantService {
       .from('ai_analysis')
       .select('id')
       .eq('applicant_id', applicantId)
-      .single();
+      .maybeSingle();
       
     if (existing) {
        throw new AppError('Analysis already completed for this candidate.', 400);
