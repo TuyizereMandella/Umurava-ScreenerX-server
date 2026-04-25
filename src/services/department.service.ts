@@ -43,4 +43,26 @@ export class DepartmentService {
 
     return data;
   }
+
+  /**
+   * Deletes a department.
+   */
+  static async deleteDepartment(organizationId: string, deptId: string) {
+    const { data, error } = await supabase
+      .from('departments')
+      .delete()
+      .eq('id', deptId)
+      .eq('organization_id', organizationId)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new AppError('Department not found', 404);
+      }
+      throw new AppError(`Failed to delete department: ${error.message}`, 500);
+    }
+
+    return data;
+  }
 }

@@ -233,26 +233,45 @@ export class ApplicantService {
       throw new AppError(`Failed to generate analysis: ${error.message}`, 500);
     }
     
+    // ---- Deep Multi-Factor Shortlisting Decision ----
     const matchScore = aiResult.match_score || 80;
-    
-    // Update the cached match score on the applicant
-    await supabase.from('applicants').update({ match_score: matchScore }).eq('id', applicantId);
+    const fitScore = aiResult.algorithmic_fit_score || 0;
+    const archScore = aiResult.architecture_score || 0;
+    const overallScore = matchScore;
+    const gaps: string[] = aiResult.gaps || [];
+
+    // A candidate is SHORTLISTED if they pass all three dimensions
+    const isShortlisted = overallScore >= 75 && fitScore >= 70 && archScore >= 65;
+    // A candidate is REJECTED if they score critically low or the AI flagged severe gaps
+    const isRejected = overallScore < 50 || (overallScore < 65 && gaps.length >= 2);
+
+    let newStatus: 'SHORTLISTED' | 'REJECTED' | 'NEW' = 'NEW';
+    if (isShortlisted) newStatus = 'SHORTLISTED';
+    else if (isRejected) newStatus = 'REJECTED';
+
+    // Update applicant status based on AI decision
+    await supabase.from('applicants').update({ match_score: matchScore, status: newStatus }).eq('id', applicantId);
 
     if (applicantInfo && applicantInfo.jobs) {
       await NotificationService.createNotification({
         organizationId,
-        type: 'success',
-        title: 'AI Screening Completed',
-        message: `Analysis finished for ${applicantInfo.name}. Match score updated.`,
+        type: newStatus === 'SHORTLISTED' ? 'success' : newStatus === 'REJECTED' ? 'warning' : 'info',
+        title: newStatus === 'SHORTLISTED' ? 'Candidate Shortlisted 🎯' : newStatus === 'REJECTED' ? 'Candidate Rejected' : 'AI Screening Completed',
+        message: newStatus === 'SHORTLISTED'
+          ? `${applicantInfo.name} scored ${matchScore}% and has been automatically shortlisted.`
+          : newStatus === 'REJECTED'
+          ? `${applicantInfo.name} scored ${matchScore}% and did not meet the shortlisting threshold.`
+          : `Analysis finished for ${applicantInfo.name}. Score: ${matchScore}%. Manual review recommended.`,
       });
 
       await AuditService.logActivity({
         organizationId,
-        actionType: 'AI Screening Completed',
-        description: `ScreenerX AI completed evaluation for ${applicantInfo.name}. Score: ${matchScore}%`,
+        actionType: `AI Screening → ${newStatus}`,
+        description: `ScreenerX AI evaluated ${applicantInfo.name} (Score: ${matchScore}%, Algo: ${fitScore}%, Arch: ${archScore}%). Decision: ${newStatus}`,
       });
-      if (matchScore >= 85) {
-        // Find or create AI Technical Screen type
+
+      // Auto-schedule interview only for shortlisted candidates
+      if (newStatus === 'SHORTLISTED') {
         let { data: types } = await supabase
           .from('interview_types')
           .select('id')
@@ -261,31 +280,29 @@ export class ApplicantService {
           .limit(1);
 
         let interviewTypeId;
-        
         if (!types || types.length === 0) {
-           const { data: newType } = await supabase
-             .from('interview_types')
-             .insert([{ organization_id: organizationId, name: 'AI Technical Screen', duration_minutes: 45 }])
-             .select()
-             .single();
-           if (newType) interviewTypeId = newType.id;
+          const { data: newType } = await supabase
+            .from('interview_types')
+            .insert([{ organization_id: organizationId, name: 'AI Technical Screen', duration_minutes: 45 }])
+            .select()
+            .single();
+          if (newType) interviewTypeId = newType.id;
         } else {
-           interviewTypeId = types[0].id;
+          interviewTypeId = types[0].id;
         }
 
         if (interviewTypeId) {
-          // Schedule 2 days from now at 10 AM
           const date = new Date();
           date.setDate(date.getDate() + 2);
           const scheduledDate = date.toISOString().split('T')[0];
 
           await InterviewService.scheduleInterview(organizationId, null, {
-             applicantId: applicantId,
-             interviewTypeId,
-             scheduledDate,
-             startTime: '10:00:00',
-             endTime: '10:45:00',
-             meetUrl: 'https://meet.google.com/ai-screen-mock'
+            applicantId,
+            interviewTypeId,
+            scheduledDate,
+            startTime: '10:00:00',
+            endTime: '10:45:00',
+            meetUrl: 'https://meet.google.com/ai-screen-mock'
           });
 
           await NotificationService.createNotification({
@@ -296,6 +313,42 @@ export class ApplicantService {
           });
         }
       }
+    }
+
+    return data;
+  }
+
+  /**
+   * Manually update the status of an applicant (e.g. remove from shortlist).
+   */
+  static async updateApplicantStatus(organizationId: string, applicantId: string, status: string) {
+    const validStatuses = ['NEW', 'SHORTLISTED', 'INTERVIEWING', 'REJECTED'];
+    if (!validStatuses.includes(status)) {
+      throw new AppError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400);
+    }
+
+    // Verify ownership
+    const { data: applicant, error: verifyError } = await supabase
+      .from('applicants')
+      .select('id, jobs!inner(organization_id)')
+      .eq('id', applicantId)
+      .eq('jobs.organization_id', organizationId)
+      .is('deleted_at', null)
+      .single();
+
+    if (verifyError || !applicant) {
+      throw new AppError('Applicant not found or unauthorized', 404);
+    }
+
+    const { data, error } = await supabase
+      .from('applicants')
+      .update({ status })
+      .eq('id', applicantId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppError(`Failed to update applicant status: ${error.message}`, 500);
     }
 
     return data;

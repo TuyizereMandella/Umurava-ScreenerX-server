@@ -108,3 +108,24 @@ export const deleteApplicant = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+export const updateApplicantStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = req.user!.organizationId;
+    const id = req.params.id as string;
+    const { status } = req.body;
+
+    if (!status) {
+      return next(new AppError('Status is required', 400));
+    }
+
+    const updated = await ApplicantService.updateApplicantStatus(organizationId, id, status);
+
+    res.status(200).json({
+      status: 'success',
+      data: { applicant: updated },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

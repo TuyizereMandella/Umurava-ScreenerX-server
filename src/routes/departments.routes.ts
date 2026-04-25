@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDepartments, createDepartment } from '../controllers/department.controller';
+import { getDepartments, createDepartment, deleteDepartment } from '../controllers/department.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -10,5 +10,8 @@ router.use(requireAuth);
 router.route('/')
   .get(getDepartments)
   .post(createDepartment);
+
+router.route('/:id')
+  .delete(deleteDepartment);
 
 export default router;

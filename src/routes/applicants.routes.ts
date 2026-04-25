@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { submitApplication, getAllApplicants, getApplicant, analyzeApplicant, deleteApplicant } from '../controllers/applicant.controller';
+import { submitApplication, getAllApplicants, getApplicant, analyzeApplicant, deleteApplicant, updateApplicantStatus } from '../controllers/applicant.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -13,6 +13,7 @@ router.use(requireAuth);
 router.get('/', getAllApplicants);
 router.get('/:id', getApplicant);
 router.delete('/:id', deleteApplicant);
+router.patch('/:id/status', updateApplicantStatus);
 router.post('/:id/analyze', analyzeApplicant);
 
 export default router;

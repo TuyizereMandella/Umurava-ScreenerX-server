@@ -40,3 +40,15 @@ export const createDepartment = async (req: Request, res: Response, next: NextFu
     next(error);
   }
 };
+
+export const deleteDepartment = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = req.user!.organizationId;
+    const id = req.params.id as string;
+    await DepartmentService.deleteDepartment(organizationId, id);
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
