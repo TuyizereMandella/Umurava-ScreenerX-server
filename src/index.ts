@@ -24,7 +24,10 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Global Middleware
-app.use(cors({ origin: config.allowedOrigins }));
+app.use(cors({ 
+  origin: true, // Reflects the requesting origin (allows all for dev)
+  credentials: true 
+}));
 app.use(express.json({ limit: '10mb' })); // Body parser with higher limit for base64 files if needed
 app.use(express.urlencoded({ extended: true }));
 
