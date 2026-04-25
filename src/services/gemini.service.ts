@@ -3,7 +3,7 @@ import { config } from '../config/env';
 import { AppError } from '../utils/AppError';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-1.5-flash') {
+  private static getModel(modelName = 'gemini-2.5-flash') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
     return genAI.getGenerativeModel({ model: modelName });
   }
