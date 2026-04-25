@@ -96,7 +96,7 @@ export const generateBaseline = async (req: Request, res: Response, next: NextFu
 
 export const getPublicJob = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const job = await JobService.getPublicJobById(id);
 
     res.status(200).json({
@@ -112,7 +112,7 @@ export const getPublicJob = async (req: Request, res: Response, next: NextFuncti
 
 export const deleteJob = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user!.userId;
     const organizationId = req.user!.organizationId;
 
@@ -135,7 +135,7 @@ export const deleteJob = async (req: Request, res: Response, next: NextFunction)
 
 export const updateJob = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const organizationId = req.user!.organizationId;
 
     const job = await JobService.updateJob(organizationId, id, req.body);
