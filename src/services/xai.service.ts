@@ -9,32 +9,43 @@ export class XAiService {
       throw new AppError('xAI API key is not configured', 500);
     }
 
-    const response = await fetch(this.API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.xaiApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'grok-2', // Updated from grok-beta for better compatibility
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1
-      })
-    });
+    const models = ['grok-beta', 'grok-2', 'grok-vision-beta'];
+    let lastError: any = null;
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`xAI API Error: ${response.statusText} ${JSON.stringify(errorData)}`);
+    for (const model of models) {
+      try {
+        console.log(`[xAI Service] Attempting ${model}...`);
+        const response = await fetch(this.API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.xaiApiKey}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.1
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`xAI API Error (${model}): ${response.statusText} ${JSON.stringify(errorData)}`);
+        }
+
+        const data = await response.json();
+        let content = data.choices[0].message.content;
+        content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(content);
+      } catch (error: any) {
+        console.warn(`[xAI Service] ${model} failed:`, error.message);
+        lastError = error;
+      }
     }
-
-    const data = await response.json();
-    let content = data.choices[0].message.content;
-    // Clean markdown fences if present
-    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(content);
+    throw lastError || new Error("xAI exhausted all models.");
   }
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeText?: string, knockoutSkills: string[] = []) {

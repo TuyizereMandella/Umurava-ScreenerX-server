@@ -15,19 +15,25 @@ export class GeminiService {
    * Internal helper to handle Gemini-specific retries with different versions
    */
   private static async generateWithFallback(contents: any[]) {
-    const modelV1 = this.getModel();
-    try {
-      return await modelV1.generateContent(contents);
-    } catch (error: any) {
-      // If v1 fails with a 404, try v1beta as a last resort before giving up on Gemini
-      if (error.message?.includes('404') || error.message?.includes('not found')) {
-        console.log('[Gemini Service] v1 failed, trying v1beta fallback...');
-        const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-        const modelBeta = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }, { apiVersion: 'v1beta' });
-        return await modelBeta.generateContent(contents);
+    const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    const versions = ['v1', 'v1beta'];
+    
+    let lastError: any = null;
+
+    for (const modelName of models) {
+      for (const apiVersion of versions) {
+        try {
+          console.log(`[Gemini Service] Attempting ${modelName} on ${apiVersion}...`);
+          const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+          const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: apiVersion as any });
+          return await model.generateContent(contents);
+        } catch (error: any) {
+          console.warn(`[Gemini Service] ${modelName} on ${apiVersion} failed:`, error.message);
+          lastError = error;
+        }
       }
-      throw error;
     }
+    throw lastError || new Error("Gemini exhausted all model/version combinations.");
   }
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
