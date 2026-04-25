@@ -11,6 +11,9 @@ import { AppError } from './utils/AppError';
 const app = express();
 const port = config.port;
 
+// Trust proxy for Vercel/Cloudflare rate limiting
+app.set('trust proxy', 1);
+
 // MUST be first to handle preflights for all routes
 app.use(cors({
   origin: [

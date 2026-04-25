@@ -16,7 +16,7 @@ export class XAiService {
         'Authorization': `Bearer ${config.xaiApiKey}`
       },
       body: JSON.stringify({
-        model: 'grok-beta', // or 'grok-2' depending on account
+        model: 'grok-2', // Updated from grok-beta for better compatibility
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }

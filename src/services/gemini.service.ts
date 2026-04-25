@@ -4,10 +4,30 @@ import { AppError } from '../utils/AppError';
 import { supabase } from '../config/supabase';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-1.5-pro') {
+  private static getModel(modelName = 'gemini-1.5-flash') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    // Using v1 (stable) and base model name for maximum compatibility on paid accounts
+    // We try stable v1 first, but allow for internal fallback logic if needed
+    // The Orchestrator also handles failover between providers.
     return genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1' });
+  }
+
+  /**
+   * Internal helper to handle Gemini-specific retries with different versions
+   */
+  private static async generateWithFallback(contents: any[]) {
+    const modelV1 = this.getModel();
+    try {
+      return await modelV1.generateContent(contents);
+    } catch (error: any) {
+      // If v1 fails with a 404, try v1beta as a last resort before giving up on Gemini
+      if (error.message?.includes('404') || error.message?.includes('not found')) {
+        console.log('[Gemini Service] v1 failed, trying v1beta fallback...');
+        const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+        const modelBeta = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }, { apiVersion: 'v1beta' });
+        return await modelBeta.generateContent(contents);
+      }
+      throw error;
+    }
   }
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
@@ -81,7 +101,7 @@ export class GeminiService {
         ? [prompt, resumePart]
         : [prompt];
         
-      const result = await model.generateContent(contents);
+      const result = await this.generateWithFallback(contents);
       const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
@@ -120,7 +140,7 @@ export class GeminiService {
     `;
 
     try {
-      const result = await model.generateContent(prompt);
+      const result = await this.generateWithFallback([prompt]);
       const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
@@ -165,7 +185,7 @@ export class GeminiService {
     `;
 
     try {
-      const result = await model.generateContent(prompt);
+      const result = await this.generateWithFallback([prompt]);
       return result.response.text().trim();
     } catch (error: any) {
       console.error('Gemini API Error:', error);
@@ -223,7 +243,7 @@ export class GeminiService {
     `;
 
     try {
-      const result = await model.generateContent([prompt, resumePart]);
+      const result = await this.generateWithFallback([prompt, resumePart]);
       const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
