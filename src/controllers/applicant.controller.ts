@@ -95,3 +95,16 @@ export const analyzeApplicant = async (req: Request, res: Response, next: NextFu
     next(error);
   }
 };
+
+export const deleteApplicant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = req.user!.organizationId;
+    const id = req.params.id as string;
+
+    await ApplicantService.deleteApplicant(organizationId, id);
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};

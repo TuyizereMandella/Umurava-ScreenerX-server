@@ -146,6 +146,37 @@ export class ApplicantService {
   }
 
   /**
+   * Soft deletes a specific applicant.
+   */
+  static async deleteApplicant(organizationId: string, applicantId: string) {
+    // First verify applicant belongs to organization
+    const { data: applicant, error: verifyError } = await supabase
+      .from('applicants')
+      .select('id, jobs!inner(organization_id)')
+      .eq('id', applicantId)
+      .eq('jobs.organization_id', organizationId)
+      .is('deleted_at', null)
+      .single();
+
+    if (verifyError || !applicant) {
+      throw new AppError('Applicant not found or unauthorized', 404);
+    }
+
+    const { data, error } = await supabase
+      .from('applicants')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', applicantId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppError(`Failed to delete applicant: ${error.message}`, 500);
+    }
+
+    return data;
+  }
+
+  /**
    * Triggers live Gemini AI Analysis for an applicant.
    */
   static async triggerAnalysis(applicantId: string) {
