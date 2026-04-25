@@ -9,6 +9,7 @@ export interface CreateJobDTO {
   priority?: 'HIGH' | 'REGULAR';
   deadline?: string;
   is_public?: boolean;
+  auto_ai_analysis?: boolean;
   ai_baseline?: any;
 }
 
@@ -68,6 +69,7 @@ export class JobService {
           priority: data.priority || 'REGULAR',
           deadline: data.deadline || null,
           is_public: data.is_public !== undefined ? data.is_public : true,
+          auto_ai_analysis: data.auto_ai_analysis !== undefined ? data.auto_ai_analysis : true,
           public_code: publicCode,
           public_url: publicUrlSlug,
           created_by: userId,

@@ -20,7 +20,7 @@ export class ApplicantService {
     // 1. Verify Job exists and is public
     const { data: job, error: jobError } = await supabase
       .from('jobs')
-      .select('id, organization_id, title')
+      .select('id, organization_id, title, auto_ai_analysis')
       .eq('id', data.jobId)
       .eq('is_public', true)
       .is('deleted_at', null)
@@ -66,6 +66,14 @@ export class ApplicantService {
       actionType: 'Candidate Applied',
       description: `Applicant ${data.name} submitted an application for ${job.title}`,
     });
+
+    // 5. Auto-run AI Analysis if enabled
+    if (job.auto_ai_analysis) {
+      // Run in background, don't await so we don't block the API response
+      ApplicantService.triggerAnalysis(newApplicant.id).catch(err => {
+        console.error(`Auto AI Analysis failed for applicant ${newApplicant.id}:`, err);
+      });
+    }
 
     return newApplicant;
   }
