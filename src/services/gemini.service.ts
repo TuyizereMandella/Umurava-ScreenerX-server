@@ -162,5 +162,59 @@ export class GeminiService {
       console.error('Gemini API Error:', error);
       return "Market dynamics are shifting rapidly. Maintain competitive compensation to attract top talent.";
     }
+  static async parseAndAnalyze(jobTitle: string, fileBuffer: Buffer, mimeType: string) {
+    if (!config.geminiApiKey) {
+      throw new AppError('Gemini API key is not configured', 500);
+    }
+    const model = this.getModel();
+
+    const resumePart = {
+      inlineData: {
+        data: fileBuffer.toString('base64'),
+        mimeType: mimeType
+      }
+    };
+
+    const prompt = `
+      You are ScreenerX, an expert AI recruitment orchestrator.
+      Analyze the provided resume for the role of "${jobTitle}".
+      
+      Extract and analyze everything. Respond strictly in JSON format matching this schema:
+      {
+        "personal_details": {
+          "name": "string",
+          "email": "string",
+          "phone": "string",
+          "location": "string",
+          "linkedin_url": "string",
+          "github_url": "string"
+        },
+        "analysis": {
+          "technical_dna": ["string", "string"], 
+          "algorithmic_fit_score": number, 
+          "architecture_score": number, 
+          "strengths": ["string", "string"], 
+          "gaps": ["string", "string"], 
+          "recommendation_summary": "string", 
+          "match_score": number,
+          "experience": [
+            { "company": "string", "role": "string", "duration": "string", "summary": "string" }
+          ],
+          "education": [
+            { "institution": "string", "degree": "string", "year": "string" }
+          ]
+        }
+      }
+      Be critical with scores. Only return the JSON. No markdown fences.
+    `;
+
+    try {
+      const result = await model.generateContent([prompt, resumePart]);
+      const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(responseText);
+    } catch (error: any) {
+      console.error('Gemini Parse Error:', error);
+      throw new AppError('AI failed to parse and analyze the document. Please try again.', 500);
+    }
   }
 }

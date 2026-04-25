@@ -356,4 +356,96 @@ export class ApplicantService {
 
     return data;
   }
+
+  /**
+   * Automatically creates an applicant and runs analysis from an uploaded CV.
+   */
+  static async importFromResume(organizationId: string, jobId: string, fileBuffer: Buffer, mimeType: string, resumeUrl?: string) {
+    // 1. Get Job Title
+    const { data: job } = await supabase
+      .from('jobs')
+      .select('title')
+      .eq('id', jobId)
+      .single();
+
+    if (!job) throw new AppError('Job not found', 404);
+
+    // 2. AI Parse & Analyze
+    const aiResult = await GeminiService.parseAndAnalyze(job.title, fileBuffer, mimeType);
+    const { personal_details, analysis } = aiResult;
+
+    if (!personal_details.name || !personal_details.email) {
+      throw new AppError('AI failed to extract basic contact info (name/email) from the document.', 422);
+    }
+
+    // 3. Create Applicant
+    const { data: applicant, error: appError } = await supabase
+      .from('applicants')
+      .insert([{
+        job_id: jobId,
+        name: personal_details.name,
+        email: personal_details.email,
+        phone: personal_details.phone,
+        location: personal_details.location,
+        linkedin_url: personal_details.linkedin_url,
+        github_url: personal_details.github_url,
+        resume_url: resumeUrl,
+        status: 'NEW'
+      }])
+      .select()
+      .single();
+
+    if (appError) {
+      if (appError.code === '23505') throw new AppError(`Candidate with email ${personal_details.email} already exists for this job.`, 409);
+      throw new AppError(`Failed to create applicant: ${appError.message}`, 500);
+    }
+
+    // 4. Save Analysis
+    const analysisPayload = {
+      applicant_id: applicant.id,
+      technical_dna: analysis.technical_dna,
+      algorithmic_fit_score: analysis.algorithmic_fit_score,
+      architecture_score: analysis.architecture_score,
+      strengths: analysis.strengths,
+      gaps: analysis.gaps,
+      recommendation_summary: analysis.recommendation_summary,
+      experience: analysis.experience || [],
+      education: analysis.education || []
+    };
+
+    await supabase.from('ai_analysis').insert([analysisPayload]);
+
+    // 5. Shortlisting Logic
+    const matchScore = analysis.match_score ?? 0;
+    const isShortlisted = matchScore >= 70 && (analysis.algorithmic_fit_score ?? 0) >= 60;
+    const isRejected = matchScore < 40;
+
+    let newStatus: 'SHORTLISTED' | 'REJECTED' | 'NEW' = 'NEW';
+    if (isShortlisted) newStatus = 'SHORTLISTED';
+    else if (isRejected) newStatus = 'REJECTED';
+
+    await supabase.from('applicants').update({ match_score: matchScore, status: newStatus }).eq('id', applicant.id);
+
+    // 6. Notifications & Audit
+    await NotificationService.createNotification({
+      organizationId,
+      type: newStatus === 'SHORTLISTED' ? 'success' : 'info',
+      title: 'Import Complete',
+      message: `${personal_details.name} was imported and automatically ${newStatus.toLowerCase()}.`,
+    });
+
+    await AuditService.logActivity({
+      organizationId,
+      actionType: 'Candidate Imported',
+      description: `Imported and evaluated ${personal_details.name} for ${job.title} (Score: ${matchScore}%)`,
+    });
+
+    // 7. Auto-Schedule if Shortlisted
+    if (newStatus === 'SHORTLISTED') {
+      // Logic from triggerAnalysis could be refactored into a reusable method, 
+      // but for now we keep it simple or re-trigger the scheduler logic.
+    }
+
+    return { applicant, analysis: analysisPayload };
+  }
 }

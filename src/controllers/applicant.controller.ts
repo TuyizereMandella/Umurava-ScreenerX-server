@@ -129,3 +129,33 @@ export const updateApplicantStatus = async (req: Request, res: Response, next: N
     next(error);
   }
 };
+export const importApplicant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = req.user!.organizationId;
+    const { jobId } = req.body;
+    const file = req.file;
+
+    if (!jobId || !file) {
+      return next(new AppError('Job ID and resume file are required.', 400));
+    }
+
+    // In a real production app, you would upload the file to Supabase Storage first to get a URL
+    // For this implementation, we parse the buffer directly for speed and efficiency
+    // We pass null for resumeUrl if we don't have a storage upload implemented here yet
+    const result = await ApplicantService.importFromResume(
+      organizationId,
+      jobId,
+      file.buffer,
+      file.mimetype,
+      undefined // resumeUrl
+    );
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Candidate imported and analyzed successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
