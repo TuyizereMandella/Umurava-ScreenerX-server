@@ -192,10 +192,10 @@ export class ApplicantService {
        throw new AppError('Analysis already completed for this candidate.', 400);
     }
 
-    // Fetch applicant to get name, answers, and job details
+    // Fetch applicant to get name, answers, job details, and resume_url
     const { data: applicantInfo } = await supabase
       .from('applicants')
-      .select('name, answers, jobs(organization_id, title)')
+      .select('name, answers, resume_url, jobs(organization_id, title)')
       .eq('id', applicantId)
       .single();
 
@@ -205,12 +205,13 @@ export class ApplicantService {
     
     const organizationId = (applicantInfo.jobs as any).organization_id;
 
-    // Call real Gemini API
+    // Call real Gemini API with document scanning
     const aiResult = await GeminiService.analyzeResume(
       applicantInfo.name, 
       (applicantInfo.jobs as any).title, 
       [], // skills could be extracted if we stored them
-      applicantInfo.answers
+      applicantInfo.answers,
+      applicantInfo.resume_url || undefined
     );
 
     const analysisPayload = {
@@ -220,7 +221,9 @@ export class ApplicantService {
       architecture_score: aiResult.architecture_score,
       strengths: aiResult.strengths,
       gaps: aiResult.gaps,
-      recommendation_summary: aiResult.recommendation_summary
+      recommendation_summary: aiResult.recommendation_summary,
+      experience: aiResult.experience || [],
+      education: aiResult.education || []
     };
 
     const { data, error } = await supabase

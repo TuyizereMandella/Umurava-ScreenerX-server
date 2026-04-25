@@ -8,47 +8,75 @@ export class GeminiService {
     return genAI.getGenerativeModel({ model: modelName });
   }
 
-  static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeText?: string) {
+  static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string) {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
     const model = this.getModel();
     
+    let resumePart: any = null;
+    if (resumeUrl) {
+      try {
+        const response = await fetch(resumeUrl);
+        const buffer = await response.arrayBuffer();
+        resumePart = {
+          inlineData: {
+            data: Buffer.from(buffer).toString('base64'),
+            mimeType: 'application/pdf'
+          }
+        };
+      } catch (err) {
+        console.error('Failed to fetch resume for analysis:', err);
+      }
+    }
+
     const prompt = `
       You are ScreenerX, an expert AI recruitment evaluator.
       Analyze the candidate "${name}" for the role of "${jobTitle}".
       Candidate skills: ${skills.join(', ')}
       Candidate Custom Answers: ${answers ? JSON.stringify(answers) : 'None provided'}
-      Resume/Context: ${resumeText || 'No detailed resume provided, base analysis on the name, job title, and their custom answers.'}
+      ${resumePart ? 'A resume PDF has been provided for your review. Extract all relevant details from it.' : 'No detailed resume provided, base analysis on the name, job title, and their custom answers.'}
       
       Respond strictly in JSON format matching this schema:
       {
         "technical_dna": ["string", "string"], // 3-5 core technical skills or attributes
-        "algorithmic_fit_score": number, // 0-100
-        "architecture_score": number, // 0-100
+        "algorithmic_fit_score": number, // 0-100 (be critical, avoid generic high scores unless truly deserved)
+        "architecture_score": number, // 0-100 (be critical, avoid generic high scores)
         "strengths": ["string", "string"], // 2-3 key strengths
         "gaps": ["string", "string"], // 1-2 potential gaps
         "recommendation_summary": "string", // 2-3 sentences max
-        "match_score": number // overall match 0-100
+        "match_score": number, // overall match 0-100 (be critical, distinguish between good and bad candidates)
+        "experience": [
+          { "company": "string", "role": "string", "duration": "string", "summary": "string" }
+        ],
+        "education": [
+          { "institution": "string", "degree": "string", "year": "string" }
+        ]
       }
       Only return the JSON. No markdown fences.
     `;
 
     try {
-      const result = await model.generateContent(prompt);
+      const contents = resumePart 
+        ? [prompt, resumePart]
+        : [prompt];
+        
+      const result = await model.generateContent(contents);
       const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini API Error:', error);
       // Fallback for 429 Too Many Requests or other API errors
       return {
-        technical_dna: ["System Design", "Problem Solving", "Agile Methodologies"],
-        algorithmic_fit_score: 82,
-        architecture_score: 78,
-        strengths: ["Strong baseline technical skills", "Adaptability"],
-        gaps: ["May require onboarding for specific domain nuances"],
-        recommendation_summary: "Solid candidate with relevant background. Recommended for technical screening.",
-        match_score: 85
+        technical_dna: ["General Engineering", "Adaptability"],
+        algorithmic_fit_score: 50,
+        architecture_score: 50,
+        strengths: ["Willingness to learn"],
+        gaps: ["No detailed analysis available due to provider quota"],
+        recommendation_summary: "Manual review required. AI provider temporarily unavailable.",
+        match_score: 50,
+        experience: [],
+        education: []
       };
     }
   }
