@@ -4,10 +4,10 @@ import { AppError } from '../utils/AppError';
 import { supabase } from '../config/supabase';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-1.5-flash') {
+  private static getModel(modelName = 'gemini-2.0-flash') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    // Explicitly use v1 to avoid v1beta 404 issues with certain model aliases
-    return genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1' });
+    // Use v1beta for access to latest models like Gemini 2.0 Flash
+    return genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
   }
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
