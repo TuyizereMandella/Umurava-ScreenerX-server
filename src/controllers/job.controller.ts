@@ -8,10 +8,21 @@ export const getAllJobs = async (req: Request, res: Response, next: NextFunction
     const jobs = await JobService.getAllJobs(organizationId);
 
     // Format the response to match frontend expectations
-    const formattedJobs = jobs.map(job => ({
-      ...job,
-      applicant_count: job.applicants[0]?.count || 0
-    }));
+    const formattedJobs = jobs.map(job => {
+      const scores = job.applicants
+        .map((a: any) => a.match_score)
+        .filter((score: any) => score !== null && score !== undefined && score > 0);
+      
+      const avgScore = scores.length > 0 
+        ? Math.round(scores.reduce((sum: number, val: number) => sum + val, 0) / scores.length) 
+        : null;
+
+      return {
+        ...job,
+        applicant_count: job.applicants.length,
+        avg_match_score: avgScore
+      };
+    });
 
     res.status(200).json({
       status: 'success',

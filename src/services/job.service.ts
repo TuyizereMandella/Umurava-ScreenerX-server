@@ -26,7 +26,7 @@ export class JobService {
       .from('jobs')
       .select(`
         *,
-        applicants:applicants(count)
+        applicants:applicants(id, match_score)
       `)
       .eq('organization_id', organizationId)
       .is('deleted_at', null)

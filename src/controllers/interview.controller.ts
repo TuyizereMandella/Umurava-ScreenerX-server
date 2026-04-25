@@ -88,3 +88,29 @@ export const getInterviews = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+export const updateInterview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = req.user!.organizationId;
+    const userId = req.user!.userId;
+    const interviewId = req.params.id as string;
+    const { meetUrl, scheduledDate, startTime, endTime } = req.body;
+
+    const updatedInterview = await InterviewService.updateInterview(organizationId, interviewId, userId, {
+      meetUrl,
+      scheduledDate,
+      startTime,
+      endTime
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Interview updated successfully',
+      data: {
+        interview: updatedInterview,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

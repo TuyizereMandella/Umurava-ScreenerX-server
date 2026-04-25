@@ -3,7 +3,8 @@ import {
   createInterviewType, 
   getInterviewTypes, 
   scheduleInterview, 
-  getInterviews 
+  getInterviews,
+  updateInterview
 } from '../controllers/interview.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
@@ -21,5 +22,7 @@ router.route('/types')
 router.route('/')
   .get(getInterviews)
   .post(scheduleInterview);
+
+router.patch('/:id', updateInterview);
 
 export default router;

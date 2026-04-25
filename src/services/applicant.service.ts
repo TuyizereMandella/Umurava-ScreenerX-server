@@ -349,25 +349,62 @@ export class ApplicantService {
         }
 
         if (interviewTypeId) {
-          const date = new Date();
-          date.setDate(date.getDate() + 2);
-          const scheduledDate = date.toISOString().split('T')[0];
+          let searchDate = new Date();
+          searchDate.setDate(searchDate.getDate() + 2); // Start looking at T+2 days
+          let foundDate = '';
+          let startTime = '10:00:00';
+          let endTime = '10:45:00';
+          let attempts = 0;
 
-          await InterviewService.scheduleInterview(organizationId, null, {
-            applicantId,
-            interviewTypeId,
-            scheduledDate,
-            startTime: '10:00:00',
-            endTime: '10:45:00',
-            meetUrl: 'https://meet.google.com/ai-screen-mock'
-          });
+          while (!foundDate && attempts < 30) { // Safety cap of 30 days
+            const checkDateStr = searchDate.toISOString().split('T')[0];
+            
+            // Query interviews for this organization on this date
+            const { data: dailyInterviews } = await supabase
+              .from('interviews')
+              .select('id, start_time, applicants!inner(jobs!inner(organization_id))')
+              .eq('scheduled_date', checkDateStr)
+              .eq('applicants.jobs.organization_id', organizationId);
 
-          await NotificationService.createNotification({
-            organizationId,
-            type: 'calendar',
-            title: 'AI Auto-Scheduled Interview',
-            message: `An interview was automatically scheduled for ${applicantInfo.name} on ${scheduledDate}.`,
-          });
+            if (!dailyInterviews || dailyInterviews.length === 0) {
+              foundDate = checkDateStr;
+              startTime = '10:00:00';
+              endTime = '10:45:00';
+            } else if (dailyInterviews.length === 1) {
+              foundDate = checkDateStr;
+              // Staggered time: If first is early, pick afternoon, or vice versa
+              const firstTime = dailyInterviews[0].start_time;
+              if (firstTime.startsWith('10:')) {
+                startTime = '14:00:00'; // 2 PM
+                endTime = '14:45:00';
+              } else {
+                startTime = '10:00:00'; // 10 AM
+                endTime = '10:45:00';
+              }
+            } else {
+              // Day is full (2+ interviews), move to next day
+              searchDate.setDate(searchDate.getDate() + 1);
+              attempts++;
+            }
+          }
+
+          if (foundDate) {
+            await InterviewService.scheduleInterview(organizationId, null, {
+              applicantId,
+              interviewTypeId,
+              scheduledDate: foundDate,
+              startTime,
+              endTime,
+              meetUrl: 'TBD' // Set to TBD so recruiter knows to update it
+            });
+
+            await NotificationService.createNotification({
+              organizationId,
+              type: 'calendar',
+              title: 'AI Auto-Scheduled Interview',
+              message: `An interview was automatically scheduled for ${applicantInfo.name} on ${foundDate} at ${startTime}.`,
+            });
+          }
         }
       }
     }
