@@ -15,7 +15,10 @@ export class GeminiService {
    * Internal helper to handle Gemini-specific retries with different versions
    */
   private static async generateWithFallback(contents: any[]) {
-    const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    const models = [
+      'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro', 
+      'models/gemini-1.5-flash', 'models/gemini-1.5-pro'
+    ];
     const versions = ['v1', 'v1beta'];
     
     let lastError: any = null;

@@ -9,7 +9,7 @@ export class XAiService {
       throw new AppError('xAI API key is not configured', 500);
     }
 
-    const models = ['grok-beta', 'grok-2', 'grok-vision-beta'];
+    const models = ['grok-beta', 'grok-2', 'grok-vision-beta', 'grok-latest', 'grok-1'];
     let lastError: any = null;
 
     for (const model of models) {
