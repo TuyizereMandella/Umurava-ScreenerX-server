@@ -92,3 +92,42 @@ export const generateBaseline = async (req: Request, res: Response, next: NextFu
     next(error);
   }
 };
+
+export const getPublicJob = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const job = await JobService.getPublicJobById(id);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        job,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteJob = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    const organizationId = req.user?.user_metadata?.organization_id;
+
+    if (!userId || !organizationId) {
+      return next(new AppError('Unauthorized', 401));
+    }
+
+    const job = await JobService.deleteJob(organizationId, id);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        job,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

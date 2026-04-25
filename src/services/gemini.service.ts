@@ -58,6 +58,11 @@ export class GeminiService {
         "technical_depth": "string", // 1-2 sentences
         "industry_fit": "string", // 1-2 sentences
         "precision": number, // 80-99
+        "requirements": ["string", "string", "string"], // 3-4 key bullet points for the role
+        "ai_questions": [
+          { "id": "q1", "question": "string", "hint": "string" },
+          { "id": "q2", "question": "string", "hint": "string" }
+        ],
         "market_intelligence": {
           "avg_salary": "string", // e.g., "$120k - $150k"
           "availability": "string", // "Low", "Medium", "High"

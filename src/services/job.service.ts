@@ -99,4 +99,49 @@ export class JobService {
 
     return data;
   }
+
+  /**
+   * Fetches a single job for the public candidate portal, including organization details.
+   */
+  static async getPublicJobById(jobId: string) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*, organizations(name)')
+      .eq('id', jobId)
+      .eq('is_public', true)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new AppError('Job not found or not public', 404);
+      }
+      throw new AppError(`Failed to fetch public job: ${error.message}`, 500);
+    }
+
+    return data;
+  }
+
+  /**
+   * Soft deletes a job.
+   */
+  static async deleteJob(organizationId: string, jobId: string) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', jobId)
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new AppError('Job not found', 404);
+      }
+      throw new AppError(`Failed to delete job: ${error.message}`, 500);
+    }
+
+    return data;
+  }
 }
