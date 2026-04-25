@@ -162,6 +162,8 @@ export class GeminiService {
       console.error('Gemini API Error:', error);
       return "Market dynamics are shifting rapidly. Maintain competitive compensation to attract top talent.";
     }
+  }
+
   static async parseAndAnalyze(jobTitle: string, fileBuffer: Buffer, mimeType: string) {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
