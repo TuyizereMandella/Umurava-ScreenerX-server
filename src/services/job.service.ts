@@ -8,6 +8,7 @@ export interface CreateJobDTO {
   location?: string;
   priority?: 'HIGH' | 'REGULAR';
   is_public?: boolean;
+  ai_baseline?: any;
 }
 
 export class JobService {
@@ -49,8 +50,11 @@ export class JobService {
     // Generate a unique public URL slug
     const publicUrlSlug = `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`;
 
-    // Generate AI Baseline
-    const aiBaseline = await this.generateAiBaseline(data.title);
+    // Use provided AI Baseline, or generate one if public and missing
+    let aiBaseline = data.ai_baseline;
+    if (!aiBaseline && data.is_public !== false) {
+      aiBaseline = await this.generateAiBaseline(data.title);
+    }
 
     const { data: newJob, error } = await supabase
       .from('jobs')
