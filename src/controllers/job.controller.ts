@@ -30,7 +30,7 @@ export const createJob = async (req: Request, res: Response, next: NextFunction)
     const organizationId = req.user!.organizationId;
     const userId = req.user!.userId;
     
-    const { title, department, location, priority, is_public } = req.body;
+    const { title, department, location, priority, deadline, is_public } = req.body;
 
     if (!title) {
       return next(new AppError('Job title is required', 400));
@@ -41,6 +41,7 @@ export const createJob = async (req: Request, res: Response, next: NextFunction)
       department,
       location,
       priority,
+      deadline,
       is_public
     });
 
@@ -112,14 +113,32 @@ export const getPublicJob = async (req: Request, res: Response, next: NextFuncti
 export const deleteJob = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const userId = req.user?.id;
-    const organizationId = req.user?.user_metadata?.organization_id;
+    const userId = req.user!.userId;
+    const organizationId = req.user!.organizationId;
 
     if (!userId || !organizationId) {
       return next(new AppError('Unauthorized', 401));
     }
 
     const job = await JobService.deleteJob(organizationId, id);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        job,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateJob = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.user!.organizationId;
+
+    const job = await JobService.updateJob(organizationId, id, req.body);
 
     res.status(200).json({
       status: 'success',

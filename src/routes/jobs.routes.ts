@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllJobs, createJob, getJob, generateBaseline, getPublicJob, deleteJob } from '../controllers/job.controller';
+import { getAllJobs, createJob, getJob, generateBaseline, getPublicJob, deleteJob, updateJob } from '../controllers/job.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -18,6 +18,7 @@ router.route('/')
 
 router.route('/:id')
   .get(getJob)
+  .patch(updateJob)
   .delete(deleteJob);
 
 export default router;

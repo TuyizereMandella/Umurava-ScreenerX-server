@@ -7,6 +7,7 @@ export interface CreateJobDTO {
   department?: string;
   location?: string;
   priority?: 'HIGH' | 'REGULAR';
+  deadline?: string;
   is_public?: boolean;
   ai_baseline?: any;
 }
@@ -65,6 +66,7 @@ export class JobService {
           department: data.department,
           location: data.location,
           priority: data.priority || 'REGULAR',
+          deadline: data.deadline || null,
           is_public: data.is_public !== undefined ? data.is_public : true,
           public_code: publicCode,
           public_url: publicUrlSlug,
@@ -147,5 +149,27 @@ export class JobService {
     }
 
     return data;
+  }
+  /**
+   * Updates an existing job.
+   */
+  static async updateJob(organizationId: string, jobId: string, data: Partial<CreateJobDTO>) {
+    const { data: updatedJob, error } = await supabase
+      .from('jobs')
+      .update(data)
+      .eq('id', jobId)
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new AppError('Job not found', 404);
+      }
+      throw new AppError(`Failed to update job: ${error.message}`, 500);
+    }
+
+    return updatedJob;
   }
 }
