@@ -15,5 +15,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'super-secret-screenerx-key-change-in-prod',
   jwtExpiresIn: '7d',
   geminiApiKey: process.env.GEMINI_API_KEY || '',
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
+  xaiApiKey: process.env.XAI_API_KEY || '',
   resendApiKey: process.env.RESEND_API_KEY || '',
 };

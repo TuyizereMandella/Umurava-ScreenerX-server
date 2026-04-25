@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
 import { GeminiService } from './gemini.service';
+import { AiOrchestrator } from './ai_orchestrator.service';
 
 export interface CreateJobDTO {
   title: string;
@@ -44,7 +45,8 @@ export class JobService {
    * Generates a mock AI baseline for a job.
    */
   static async generateAiBaseline(title: string) {
-    return await GeminiService.generateJobBaseline(title);
+    // Call AI Orchestrator with failover for baseline generation
+    return await AiOrchestrator.generateJobBaseline(title);
   }
 
   /**

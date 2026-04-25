@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
-import { GeminiService } from '../services/gemini.service';
+import { AiOrchestrator } from '../services/ai_orchestrator.service';
 
 export const getAiInsight = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -28,7 +28,7 @@ export const getAiInsight = async (req: Request, res: Response, next: NextFuncti
       topJobTitle: jobTitle
     };
 
-    const randomInsight = await GeminiService.generateDashboardInsight(orgContext);
+    const randomInsight = await AiOrchestrator.generateDashboardInsight(orgContext);
 
     res.status(200).json({
       status: 'success',

@@ -4,6 +4,7 @@ import { NotificationService } from './notification.service';
 import { InterviewService } from './interview.service';
 import { AuditService } from './audit.service';
 import { GeminiService } from './gemini.service';
+import { AiOrchestrator } from './ai_orchestrator.service';
 
 export interface CreateApplicantDTO {
   jobId: string;
@@ -257,15 +258,15 @@ export class ApplicantService {
     const threshold = (applicantInfo.jobs as any).shortlist_threshold || 70;
     const knockoutSkills = (applicantInfo.jobs as any).knockout_skills || [];
 
-    // Call real Gemini API with document scanning and knockout check
-    const aiResult = await GeminiService.analyzeResume(
-      applicantInfo.name, 
-      (applicantInfo.jobs as any).title, 
-      [], 
-      applicantInfo.answers,
-      applicantInfo.resume_url || undefined,
+    // Call AI Orchestrator for multi-model analysis with failover
+    const aiResult = await AiOrchestrator.analyzeResume(organizationId, {
+      name: applicantInfo.name, 
+      jobTitle: (applicantInfo.jobs as any).title, 
+      skills: [], 
+      answers: applicantInfo.answers as Record<string, string>,
+      resumeUrl: applicantInfo.resume_url || undefined,
       knockoutSkills
-    );
+    });
 
     const analysisPayload = {
       applicant_id: applicantId,
@@ -463,8 +464,13 @@ export class ApplicantService {
     const threshold = job.shortlist_threshold || 70;
     const knockoutSkills = job.knockout_skills || [];
 
-    // 2. AI Parse & Analyze
-    const aiResult = await GeminiService.parseAndAnalyze(job.title, fileBuffer, mimeType, knockoutSkills);
+    // 2. AI Parse & Analyze via Orchestrator
+    const aiResult = await AiOrchestrator.parseAndAnalyze(organizationId, {
+      jobTitle: job.title,
+      fileBuffer,
+      mimeType,
+      knockoutSkills
+    });
     const personal_details = aiResult?.personal_details || {};
     const analysis = aiResult?.analysis || {};
 
