@@ -3,7 +3,7 @@ import { AppError } from '../utils/AppError';
 
 export class DepartmentService {
   /**
-   * Retrieves all departments for a specific organization.
+   * Retrieves all departments for a specific organization. 
    */
   static async getDepartments(organizationId: string) {
     const { data, error } = await supabase
