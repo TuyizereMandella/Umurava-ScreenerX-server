@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError';
 import { supabase } from '../config/supabase';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-1.5-flash') {
+  private static getModel(modelName = 'gemini-1.5-flash-latest') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
     return genAI.getGenerativeModel({ model: modelName });
   }
