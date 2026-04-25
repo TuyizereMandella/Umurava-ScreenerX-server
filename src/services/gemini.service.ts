@@ -6,8 +6,8 @@ import { supabase } from '../config/supabase';
 export class GeminiService {
   private static getModel(modelName = 'gemini-1.5-flash') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    // Reverting to base flash model name with v1beta to resolve alias 404s
-    return genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
+    // Use the default SDK versioning to maximize compatibility across regions
+    return genAI.getGenerativeModel({ model: modelName });
   }
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
