@@ -8,7 +8,7 @@ export class GeminiService {
     return genAI.getGenerativeModel({ model: modelName });
   }
 
-  static async analyzeResume(name: string, jobTitle: string, skills: string[], resumeText?: string) {
+  static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeText?: string) {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
@@ -18,7 +18,8 @@ export class GeminiService {
       You are ScreenerX, an expert AI recruitment evaluator.
       Analyze the candidate "${name}" for the role of "${jobTitle}".
       Candidate skills: ${skills.join(', ')}
-      Resume/Context: ${resumeText || 'No detailed resume provided, base analysis on the name and job title realistically.'}
+      Candidate Custom Answers: ${answers ? JSON.stringify(answers) : 'None provided'}
+      Resume/Context: ${resumeText || 'No detailed resume provided, base analysis on the name, job title, and their custom answers.'}
       
       Respond strictly in JSON format matching this schema:
       {

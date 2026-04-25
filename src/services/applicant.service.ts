@@ -10,6 +10,11 @@ export interface CreateApplicantDTO {
   name: string;
   email: string;
   resumeUrl?: string;
+  phone?: string;
+  location?: string;
+  linkedin_url?: string;
+  github_url?: string;
+  answers?: any;
 }
 
 export class ApplicantService {
@@ -39,6 +44,11 @@ export class ApplicantService {
           name: data.name,
           email: data.email,
           resume_url: data.resumeUrl,
+          phone: data.phone,
+          location: data.location,
+          linkedin_url: data.linkedin_url,
+          github_url: data.github_url,
+          answers: data.answers,
           status: 'NEW',
         },
       ])
@@ -151,10 +161,10 @@ export class ApplicantService {
        throw new AppError('Analysis already completed for this candidate.', 400);
     }
 
-    // Fetch applicant to get name and job details
+    // Fetch applicant to get name, answers, and job details
     const { data: applicantInfo } = await supabase
       .from('applicants')
-      .select('name, jobs(organization_id, title)')
+      .select('name, answers, jobs(organization_id, title)')
       .eq('id', applicantId)
       .single();
 
@@ -168,7 +178,8 @@ export class ApplicantService {
     const aiResult = await GeminiService.analyzeResume(
       applicantInfo.name, 
       (applicantInfo.jobs as any).title, 
-      []
+      [], // skills could be extracted if we stored them
+      applicantInfo.answers
     );
 
     const analysisPayload = {

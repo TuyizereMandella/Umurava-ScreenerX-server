@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError';
 
 export const submitApplication = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { jobId, name, email, resumeUrl } = req.body;
+    const { jobId, name, email, resumeUrl, phone, location, linkedin_url, github_url, answers } = req.body;
 
     if (!jobId || !name || !email) {
       return next(new AppError('Job ID, name, and email are required.', 400));
@@ -15,6 +15,11 @@ export const submitApplication = async (req: Request, res: Response, next: NextF
       name,
       email,
       resumeUrl,
+      phone,
+      location,
+      linkedin_url,
+      github_url,
+      answers
     });
 
     res.status(201).json({

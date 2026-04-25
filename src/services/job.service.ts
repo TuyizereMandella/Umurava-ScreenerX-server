@@ -10,6 +10,7 @@ export interface CreateJobDTO {
   deadline?: string;
   is_public?: boolean;
   auto_ai_analysis?: boolean;
+  requires_access_code?: boolean;
   ai_baseline?: any;
 }
 
@@ -70,6 +71,7 @@ export class JobService {
           deadline: data.deadline || null,
           is_public: data.is_public !== undefined ? data.is_public : true,
           auto_ai_analysis: data.auto_ai_analysis !== undefined ? data.auto_ai_analysis : true,
+          requires_access_code: data.requires_access_code !== undefined ? data.requires_access_code : false,
           public_code: publicCode,
           public_url: publicUrlSlug,
           created_by: userId,
@@ -109,20 +111,21 @@ export class JobService {
   }
 
   /**
-   * Fetches a single job for the public candidate portal, including organization details.
+   * Fetches a single job for the public candidate portal.
+   * Returns the job regardless of is_public status (so frontend can render the correct closed/lock screen).
+   * Omits soft-deleted jobs.
    */
   static async getPublicJobById(jobId: string) {
     const { data, error } = await supabase
       .from('jobs')
       .select('*, organizations(name)')
       .eq('id', jobId)
-      .eq('is_public', true)
       .is('deleted_at', null)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        throw new AppError('Job not found or not public', 404);
+        throw new AppError('Job not found', 404);
       }
       throw new AppError(`Failed to fetch public job: ${error.message}`, 500);
     }
@@ -153,12 +156,29 @@ export class JobService {
     return data;
   }
   /**
-   * Updates an existing job.
+   * Updates an existing job. Only whitelisted fields can be changed.
    */
   static async updateJob(organizationId: string, jobId: string, data: Partial<CreateJobDTO>) {
+    // SECURITY: Explicitly whitelist fields that can be updated.
+    // This prevents mass-assignment attacks where a caller could overwrite
+    // sensitive fields like organization_id, created_by, ai_baseline, etc.
+    const allowedUpdates: Record<string, any> = {};
+    if (data.title !== undefined)                 allowedUpdates.title = data.title;
+    if (data.department !== undefined)            allowedUpdates.department = data.department;
+    if (data.location !== undefined)              allowedUpdates.location = data.location;
+    if (data.priority !== undefined)              allowedUpdates.priority = data.priority;
+    if (data.deadline !== undefined)              allowedUpdates.deadline = data.deadline;
+    if (data.is_public !== undefined)             allowedUpdates.is_public = data.is_public;
+    if (data.auto_ai_analysis !== undefined)      allowedUpdates.auto_ai_analysis = data.auto_ai_analysis;
+    if (data.requires_access_code !== undefined)  allowedUpdates.requires_access_code = data.requires_access_code;
+
+    if (Object.keys(allowedUpdates).length === 0) {
+      throw new AppError('No valid fields provided for update.', 400);
+    }
+
     const { data: updatedJob, error } = await supabase
       .from('jobs')
-      .update(data)
+      .update(allowedUpdates)
       .eq('id', jobId)
       .eq('organization_id', organizationId)
       .is('deleted_at', null)
