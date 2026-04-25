@@ -8,6 +8,7 @@ import auditRoutes from './audit.routes';
 import dashboardRoutes from './dashboard.routes';
 import emailRoutes from './email.routes';
 import uploadRoutes from './upload.routes';
+import departmentRoutes from './departments.routes';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/audit', auditRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/emails', emailRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/departments', departmentRoutes);
 
 export default router;
