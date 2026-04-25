@@ -1,14 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config/env';
 import { AppError } from '../utils/AppError';
+import { supabase } from '../config/supabase';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-2.5-flash') {
+  private static getModel(modelName = 'gemini-1.5-flash') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
     return genAI.getGenerativeModel({ model: modelName });
   }
 
-  static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string) {
+  static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
@@ -17,14 +18,29 @@ export class GeminiService {
     let resumePart: any = null;
     if (resumeUrl) {
       try {
-        const response = await fetch(resumeUrl);
-        const buffer = await response.arrayBuffer();
-        resumePart = {
-          inlineData: {
-            data: Buffer.from(buffer).toString('base64'),
-            mimeType: 'application/pdf'
-          }
-        };
+        // Extract the path from the full public URL to download via SDK
+        const urlObj = new URL(resumeUrl);
+        // Path format: /storage/v1/object/public/{bucket}/{filePath}
+        const pathParts = urlObj.pathname.split('/');
+        const bucketIdx = pathParts.findIndex(p => p === 'public') + 1;
+        const bucket = pathParts[bucketIdx];
+        const filePath = pathParts.slice(bucketIdx + 1).join('/');
+
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from(bucket)
+          .download(filePath);
+
+        if (!downloadError && fileData) {
+          const arrayBuffer = await fileData.arrayBuffer();
+          resumePart = {
+            inlineData: {
+              data: Buffer.from(arrayBuffer).toString('base64'),
+              mimeType: fileData.type || 'application/pdf'
+            }
+          };
+        } else {
+          console.warn('Could not download resume from storage, proceeding without file:', downloadError?.message);
+        }
       } catch (err) {
         console.error('Failed to fetch resume for analysis:', err);
       }
@@ -34,18 +50,21 @@ export class GeminiService {
       You are ScreenerX, an expert AI recruitment evaluator.
       Analyze the candidate "${name}" for the role of "${jobTitle}".
       Candidate skills: ${skills.join(', ')}
+      Mandatory "Knockout" Skills (REJECT if missing): ${knockoutSkills.length > 0 ? knockoutSkills.join(', ') : 'None'}
       Candidate Custom Answers: ${answers ? JSON.stringify(answers) : 'None provided'}
       ${resumePart ? 'A resume PDF has been provided for your review. Extract all relevant details from it.' : 'No detailed resume provided, base analysis on the name, job title, and their custom answers.'}
       
       Respond strictly in JSON format matching this schema:
       {
-        "technical_dna": ["string", "string"], // 3-5 core technical skills or attributes
-        "algorithmic_fit_score": number, // 0-100 (be critical, avoid generic high scores unless truly deserved)
-        "architecture_score": number, // 0-100 (be critical, avoid generic high scores)
-        "strengths": ["string", "string"], // 2-3 key strengths
-        "gaps": ["string", "string"], // 1-2 potential gaps
-        "recommendation_summary": "string", // 2-3 sentences max
-        "match_score": number, // overall match 0-100 (be critical, distinguish between good and bad candidates)
+        "technical_dna": ["string", "string"], 
+        "algorithmic_fit_score": number, 
+        "architecture_score": number, 
+        "strengths": ["string", "string"], 
+        "gaps": ["string", "string"], 
+        "recommendation_summary": "string", 
+        "match_score": number,
+        "is_knocked_out": boolean, // Set to true ONLY if they are missing any of the Mandatory Knockout Skills
+        "missing_knockout_skills": ["string"], // List the mandatory skills they are missing
         "experience": [
           { "company": "string", "role": "string", "duration": "string", "summary": "string" }
         ],
@@ -65,19 +84,8 @@ export class GeminiService {
       const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
-      console.error('Gemini API Error:', error);
-      // Fallback for 429 Too Many Requests or other API errors
-      return {
-        technical_dna: ["General Engineering", "Adaptability"],
-        algorithmic_fit_score: 50,
-        architecture_score: 50,
-        strengths: ["Willingness to learn"],
-        gaps: ["No detailed analysis available due to provider quota"],
-        recommendation_summary: "Manual review required. AI provider temporarily unavailable.",
-        match_score: 50,
-        experience: [],
-        education: []
-      };
+      console.error('Gemini analyzeResume Error:', error.message || error);
+      throw new AppError(`AI analysis failed: ${error.message || 'Unknown Gemini error'}`, 500);
     }
   }
 
@@ -164,7 +172,7 @@ export class GeminiService {
     }
   }
 
-  static async parseAndAnalyze(jobTitle: string, fileBuffer: Buffer, mimeType: string) {
+  static async parseAndAnalyze(jobTitle: string, fileBuffer: Buffer, mimeType: string, knockoutSkills: string[] = []) {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
@@ -180,6 +188,7 @@ export class GeminiService {
     const prompt = `
       You are ScreenerX, an expert AI recruitment orchestrator.
       Analyze the provided resume for the role of "${jobTitle}".
+      Mandatory "Knockout" Skills (REJECT if missing): ${knockoutSkills.length > 0 ? knockoutSkills.join(', ') : 'None'}
       
       Extract and analyze everything. Respond strictly in JSON format matching this schema:
       {
@@ -199,6 +208,8 @@ export class GeminiService {
           "gaps": ["string", "string"], 
           "recommendation_summary": "string", 
           "match_score": number,
+          "is_knocked_out": boolean,
+          "missing_knockout_skills": ["string"],
           "experience": [
             { "company": "string", "role": "string", "duration": "string", "summary": "string" }
           ],
@@ -216,6 +227,9 @@ export class GeminiService {
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini Parse Error:', error);
+      if (error.message && error.message.includes('mimeType')) {
+        throw new AppError('Unsupported file type. Please upload a PDF file instead of Word documents.', 400);
+      }
       throw new AppError('AI failed to parse and analyze the document. Please try again.', 500);
     }
   }

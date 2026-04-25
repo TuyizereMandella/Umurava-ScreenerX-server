@@ -6,8 +6,8 @@ import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
-// Public route for candidates
-router.post('/ingest', submitApplication);
+// Public route for candidates — optional resume upload supported
+router.post('/ingest', upload.single('resume'), submitApplication);
 
 // Protected routes for HR
 router.use(requireAuth);

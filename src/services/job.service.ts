@@ -12,6 +12,9 @@ export interface CreateJobDTO {
   auto_ai_analysis?: boolean;
   requires_access_code?: boolean;
   ai_baseline?: any;
+  shortlist_threshold?: number;
+  knockout_skills?: string[];
+  description?: string;
 }
 
 export class JobService {
@@ -27,6 +30,7 @@ export class JobService {
       `)
       .eq('organization_id', organizationId)
       .is('deleted_at', null)
+      .is('applicants.deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -76,6 +80,9 @@ export class JobService {
           public_url: publicUrlSlug,
           created_by: userId,
           ai_baseline: aiBaseline,
+          shortlist_threshold: data.shortlist_threshold !== undefined ? data.shortlist_threshold : 70,
+          knockout_skills: data.knockout_skills || [],
+          description: data.description || null,
         },
       ])
       .select()
@@ -171,6 +178,9 @@ export class JobService {
     if (data.is_public !== undefined)             allowedUpdates.is_public = data.is_public;
     if (data.auto_ai_analysis !== undefined)      allowedUpdates.auto_ai_analysis = data.auto_ai_analysis;
     if (data.requires_access_code !== undefined)  allowedUpdates.requires_access_code = data.requires_access_code;
+    if (data.shortlist_threshold !== undefined)   allowedUpdates.shortlist_threshold = data.shortlist_threshold;
+    if (data.knockout_skills !== undefined)        allowedUpdates.knockout_skills = data.knockout_skills;
+    if (data.description !== undefined)            allowedUpdates.description = data.description;
 
     if (Object.keys(allowedUpdates).length === 0) {
       throw new AppError('No valid fields provided for update.', 400);

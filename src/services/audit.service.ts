@@ -20,6 +20,7 @@ export class AuditService {
         users(full_name)
       `)
       .eq('organization_id', organizationId)
+      .or('action_type.ilike.%AI%,action_type.eq.Candidate Applied')
       .order('created_at', { ascending: false });
 
     if (error) {

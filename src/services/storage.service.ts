@@ -2,20 +2,21 @@ import { supabase } from '../config/supabase';
 import { AppError } from '../utils/AppError';
 
 export class StorageService {
+  static readonly BUCKET = 'resumes';
+
   /**
    * Uploads a resume to the 'resumes' Supabase Storage bucket.
    */
-  static async uploadResume(fileBuffer: Buffer, originalName: string, organizationId: string): Promise<string> {
+  static async uploadResume(fileBuffer: Buffer, originalName: string, organizationId: string, mimeType = 'application/pdf'): Promise<string> {
     try {
-      // Create a unique file path: organizationId/timestamp-filename
       const timestamp = Date.now();
       const sanitizedName = originalName.replace(/[^a-zA-Z0-9.]/g, '_');
       const filePath = `${organizationId}/${timestamp}-${sanitizedName}`;
 
       const { data, error } = await supabase.storage
-        .from('resumes')
+        .from(StorageService.BUCKET)
         .upload(filePath, fileBuffer, {
-          contentType: 'application/pdf',
+          contentType: mimeType,
           upsert: false,
         });
 
@@ -23,10 +24,9 @@ export class StorageService {
         throw new AppError(`Supabase Storage error: ${error.message}`, 500);
       }
 
-      // Get the public URL for the uploaded file
       const { data: publicUrlData } = supabase.storage
-        .from('resumes')
-        .getPublicUrl(filePath);
+        .from(StorageService.BUCKET)
+        .getPublicUrl(data.path);
 
       return publicUrlData.publicUrl;
     } catch (error: any) {
@@ -35,3 +35,4 @@ export class StorageService {
     }
   }
 }
+

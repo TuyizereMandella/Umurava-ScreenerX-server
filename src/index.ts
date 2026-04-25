@@ -11,24 +11,30 @@ import { AppError } from './utils/AppError';
 const app = express();
 const port = config.port;
 
+// MUST be first to handle preflights for all routes
+app.use(cors({ 
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-app-context']
+}));
+
 // Security & Production Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
-  standardHeaders: 'draft-7', // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+  limit: 1000, // Increased limit for dev
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
 });
 app.use('/api/', limiter);
 
 // Global Middleware
-app.use(cors({ 
-  origin: true, // Reflects the requesting origin (allows all for dev)
-  credentials: true 
-}));
-app.use(express.json({ limit: '10mb' })); // Body parser with higher limit for base64 files if needed
+app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
 
 // Health Check

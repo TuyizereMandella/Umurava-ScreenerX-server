@@ -166,3 +166,19 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
     next(error);
   }
 };
+
+export const getOrgUsers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = req.user!.organizationId;
+    const users = await AuthService.getOrganizationUsers(organizationId);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        users,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

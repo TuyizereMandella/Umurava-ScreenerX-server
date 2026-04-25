@@ -111,4 +111,21 @@ export class AuthService {
       .update({ last_login: new Date().toISOString() })
       .eq('id', userId);
   }
+
+  /**
+   * Fetches all users belonging to a specific organization.
+   */
+  static async getOrganizationUsers(organizationId: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, email, role')
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null);
+
+    if (error) {
+      throw new AppError(`Failed to fetch organization users: ${error.message}`, 500);
+    }
+
+    return data;
+  }
 }

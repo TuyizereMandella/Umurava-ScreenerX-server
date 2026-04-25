@@ -10,6 +10,8 @@ export interface CreateApplicantDTO {
   name: string;
   email: string;
   resumeUrl?: string;
+  fileBuffer?: Buffer;
+  fileMimeType?: string;
   phone?: string;
   location?: string;
   linkedin_url?: string;
@@ -18,6 +20,39 @@ export interface CreateApplicantDTO {
 }
 
 export class ApplicantService {
+
+  /**
+   * Uploads a resume file buffer to Supabase Storage and returns the public URL.
+   */
+  static async uploadResumeToStorage(fileBuffer: Buffer, mimeType: string, jobId: string, email: string): Promise<string | null> {
+    try {
+      const ext = mimeType.includes('pdf') ? 'pdf' : 'docx';
+      const safeEmail = email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const fileName = `${jobId}/${safeEmail}_${Date.now()}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from('resumes')
+        .upload(fileName, fileBuffer, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (error) {
+        console.error('Failed to upload resume to storage:', error.message);
+        return null;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('resumes')
+        .getPublicUrl(data.path);
+
+      return publicUrlData.publicUrl;
+    } catch (err) {
+      console.error('Resume storage upload failed:', err);
+      return null;
+    }
+  }
+
   /**
    * Public endpoint to submit a new application.
    */
@@ -35,7 +70,15 @@ export class ApplicantService {
       throw new AppError('Job not found or is no longer accepting applications.', 404);
     }
 
-    // 2. Insert Applicant
+    // 2. Upload resume to Supabase Storage if a file buffer was provided
+    let resolvedResumeUrl = data.resumeUrl || null;
+    if (data.fileBuffer && data.fileMimeType) {
+      resolvedResumeUrl = await ApplicantService.uploadResumeToStorage(
+        data.fileBuffer, data.fileMimeType, job.id, data.email
+      );
+    }
+
+    // 3. Insert Applicant
     const { data: newApplicant, error: applicantError } = await supabase
       .from('applicants')
       .insert([
@@ -43,7 +86,7 @@ export class ApplicantService {
           job_id: job.id,
           name: data.name,
           email: data.email,
-          resume_url: data.resumeUrl,
+          resume_url: resolvedResumeUrl,
           phone: data.phone,
           location: data.location,
           linkedin_url: data.linkedin_url,
@@ -96,7 +139,7 @@ export class ApplicantService {
       .from('applicants')
       .select(`
         *,
-        jobs!inner(id, title, organization_id),
+        jobs!inner(id, title, department, organization_id, shortlist_threshold),
         ai_analysis(*)
       `)
       .eq('jobs.organization_id', organizationId)
@@ -127,7 +170,7 @@ export class ApplicantService {
       .from('applicants')
       .select(`
         *,
-        jobs!inner(organization_id, title),
+        jobs!inner(organization_id, title, department, shortlist_threshold),
         ai_analysis(*)
       `)
       .eq('id', applicantId)
@@ -152,7 +195,7 @@ export class ApplicantService {
     // First verify applicant belongs to organization
     const { data: applicant, error: verifyError } = await supabase
       .from('applicants')
-      .select('id, jobs!inner(organization_id)')
+      .select('id, name, jobs!inner(organization_id)')
       .eq('id', applicantId)
       .eq('jobs.organization_id', organizationId)
       .is('deleted_at', null)
@@ -173,6 +216,13 @@ export class ApplicantService {
       throw new AppError(`Failed to delete applicant: ${error.message}`, 500);
     }
 
+    // Log Activity
+    await AuditService.logActivity({
+      organizationId,
+      actionType: 'AI Candidate Removed',
+      description: `Applicant ${applicant.name} was removed from the talent pool.`,
+    });
+
     return data;
   }
 
@@ -192,10 +242,10 @@ export class ApplicantService {
        throw new AppError('Analysis already completed for this candidate.', 400);
     }
 
-    // Fetch applicant to get name, answers, job details, and resume_url
+    // Fetch applicant to get name, answers, job details, resume_url, threshold, and knockout_skills
     const { data: applicantInfo } = await supabase
       .from('applicants')
-      .select('name, answers, resume_url, jobs(organization_id, title)')
+      .select('name, answers, resume_url, jobs(organization_id, title, shortlist_threshold, knockout_skills)')
       .eq('id', applicantId)
       .single();
 
@@ -204,14 +254,17 @@ export class ApplicantService {
     }
     
     const organizationId = (applicantInfo.jobs as any).organization_id;
+    const threshold = (applicantInfo.jobs as any).shortlist_threshold || 70;
+    const knockoutSkills = (applicantInfo.jobs as any).knockout_skills || [];
 
-    // Call real Gemini API with document scanning
+    // Call real Gemini API with document scanning and knockout check
     const aiResult = await GeminiService.analyzeResume(
       applicantInfo.name, 
       (applicantInfo.jobs as any).title, 
-      [], // skills could be extracted if we stored them
+      [], 
       applicantInfo.answers,
-      applicantInfo.resume_url || undefined
+      applicantInfo.resume_url || undefined,
+      knockoutSkills
     );
 
     const analysisPayload = {
@@ -242,11 +295,12 @@ export class ApplicantService {
     const archScore = aiResult.architecture_score ?? 0;
     const overallScore = matchScore;
     const gaps: string[] = aiResult.gaps || [];
+    const isKnockedOut = aiResult.is_knocked_out === true;
 
-    // A candidate is SHORTLISTED if they pass all three dimensions (Relaxed thresholds)
-    const isShortlisted = overallScore >= 70 && fitScore >= 60 && archScore >= 60;
-    // A candidate is REJECTED if they score critically low or the AI flagged severe gaps
-    const isRejected = overallScore < 40 || (overallScore < 60 && gaps.length >= 3);
+    // A candidate is SHORTLISTED if they pass the job's specific threshold AND are not knocked out
+    const isShortlisted = !isKnockedOut && overallScore >= threshold && fitScore >= (threshold - 10) && archScore >= (threshold - 15);
+    // A candidate is REJECTED if they are knocked out OR score critically low
+    const isRejected = isKnockedOut || overallScore < (threshold - 30) || (overallScore < threshold && gaps.length >= 3);
 
     let newStatus: 'SHORTLISTED' | 'REJECTED' | 'NEW' = 'NEW';
     if (isShortlisted) newStatus = 'SHORTLISTED';
@@ -361,35 +415,43 @@ export class ApplicantService {
    * Automatically creates an applicant and runs analysis from an uploaded CV.
    */
   static async importFromResume(organizationId: string, jobId: string, fileBuffer: Buffer, mimeType: string, resumeUrl?: string) {
-    // 1. Get Job Title
+    // 1. Get Job Info and Threshold
     const { data: job } = await supabase
       .from('jobs')
-      .select('title')
+      .select('title, shortlist_threshold, knockout_skills')
       .eq('id', jobId)
       .single();
 
     if (!job) throw new AppError('Job not found', 404);
+    const threshold = job.shortlist_threshold || 70;
+    const knockoutSkills = job.knockout_skills || [];
 
     // 2. AI Parse & Analyze
-    const aiResult = await GeminiService.parseAndAnalyze(job.title, fileBuffer, mimeType);
-    const { personal_details, analysis } = aiResult;
+    const aiResult = await GeminiService.parseAndAnalyze(job.title, fileBuffer, mimeType, knockoutSkills);
+    const personal_details = aiResult?.personal_details || {};
+    const analysis = aiResult?.analysis || {};
 
     if (!personal_details.name || !personal_details.email) {
       throw new AppError('AI failed to extract basic contact info (name/email) from the document.', 422);
     }
 
-    // 3. Create Applicant
+    // 3. Upload resume file to Supabase Storage
+    const storedResumeUrl = await ApplicantService.uploadResumeToStorage(
+      fileBuffer, mimeType, jobId, personal_details.email
+    );
+
+    // 4. Create Applicant
     const { data: applicant, error: appError } = await supabase
       .from('applicants')
       .insert([{
         job_id: jobId,
         name: personal_details.name,
         email: personal_details.email,
-        phone: personal_details.phone,
-        location: personal_details.location,
-        linkedin_url: personal_details.linkedin_url,
-        github_url: personal_details.github_url,
-        resume_url: resumeUrl,
+        phone: personal_details.phone || null,
+        location: personal_details.location || null,
+        linkedin_url: personal_details.linkedin_url || null,
+        github_url: personal_details.github_url || null,
+        resume_url: storedResumeUrl || resumeUrl || null,
         status: 'NEW'
       }])
       .select()
@@ -403,22 +465,30 @@ export class ApplicantService {
     // 4. Save Analysis
     const analysisPayload = {
       applicant_id: applicant.id,
-      technical_dna: analysis.technical_dna,
-      algorithmic_fit_score: analysis.algorithmic_fit_score,
-      architecture_score: analysis.architecture_score,
-      strengths: analysis.strengths,
-      gaps: analysis.gaps,
-      recommendation_summary: analysis.recommendation_summary,
+      technical_dna: analysis.technical_dna || [],
+      algorithmic_fit_score: analysis.algorithmic_fit_score || 0,
+      architecture_score: analysis.architecture_score || 0,
+      strengths: analysis.strengths || [],
+      gaps: analysis.gaps || [],
+      recommendation_summary: analysis.recommendation_summary || 'No summary provided',
       experience: analysis.experience || [],
       education: analysis.education || []
     };
 
-    await supabase.from('ai_analysis').insert([analysisPayload]);
+    const { error: analysisError } = await supabase.from('ai_analysis').insert([analysisPayload]);
+    if (analysisError) {
+      console.error('Failed to insert AI analysis:', analysisError);
+    }
 
-    // 5. Shortlisting Logic
+    // 5. Shortlisting Logic (Respecting custom job threshold)
     const matchScore = analysis.match_score ?? 0;
-    const isShortlisted = matchScore >= 70 && (analysis.algorithmic_fit_score ?? 0) >= 60;
-    const isRejected = matchScore < 40;
+    const fitScore = analysis.algorithmic_fit_score ?? 0;
+    const archScore = analysis.architecture_score ?? 0;
+    const isKnockedOut = analysis.is_knocked_out === true;
+    const gaps = analysis.gaps || [];
+
+    const isShortlisted = !isKnockedOut && matchScore >= threshold && fitScore >= (threshold - 10) && archScore >= (threshold - 15);
+    const isRejected = isKnockedOut || matchScore < (threshold - 30) || (matchScore < threshold && gaps.length >= 3);
 
     let newStatus: 'SHORTLISTED' | 'REJECTED' | 'NEW' = 'NEW';
     if (isShortlisted) newStatus = 'SHORTLISTED';
@@ -436,7 +506,7 @@ export class ApplicantService {
 
     await AuditService.logActivity({
       organizationId,
-      actionType: 'Candidate Imported',
+      actionType: 'AI Candidate Imported',
       description: `Imported and evaluated ${personal_details.name} for ${job.title} (Score: ${matchScore}%)`,
     });
 

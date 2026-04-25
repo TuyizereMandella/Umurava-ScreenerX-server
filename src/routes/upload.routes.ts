@@ -22,7 +22,7 @@ router.post('/resume', upload.single('resume'), async (req: Request, res: Respon
       return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     }
 
-    const resumeUrl = await StorageService.uploadResume(file.buffer, file.originalname, organizationId);
+    const resumeUrl = await StorageService.uploadResume(file.buffer, file.originalname, organizationId, file.mimetype);
 
     res.status(200).json({
       status: 'success',

@@ -30,7 +30,20 @@ export const createJob = async (req: Request, res: Response, next: NextFunction)
     const organizationId = req.user!.organizationId;
     const userId = req.user!.userId;
     
-    const { title, department, location, priority, deadline, is_public, auto_ai_analysis, requires_access_code } = req.body;
+    const { 
+      title, 
+      department, 
+      location, 
+      priority, 
+      deadline, 
+      is_public, 
+      auto_ai_analysis, 
+      requires_access_code,
+      ai_baseline,
+      shortlist_threshold,
+      knockout_skills,
+      description
+    } = req.body;
 
     if (!title) {
       return next(new AppError('Job title is required', 400));
@@ -44,7 +57,11 @@ export const createJob = async (req: Request, res: Response, next: NextFunction)
       deadline,
       is_public,
       auto_ai_analysis,
-      requires_access_code
+      requires_access_code,
+      ai_baseline,
+      shortlist_threshold,
+      knockout_skills,
+      description
     });
 
     res.status(201).json({
