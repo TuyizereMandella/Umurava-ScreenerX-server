@@ -13,15 +13,24 @@ export class GeminiService {
 
 
   private static async generateWithFallback(contents: any[]) {
-    // Standard models that are generally available. 
-    // Flash 1.5 is preferred for speed and cost, Pro 1.5 for depth.
-    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    // Including -latest variants as some regions/keys require them
+    // Adding 1.0 variants as a final absolute fallback
+    const models = [
+      'gemini-1.5-flash', 
+      'gemini-1.5-flash-latest', 
+      'gemini-1.5-pro', 
+      'gemini-1.5-pro-latest',
+      'gemini-1.0-pro',
+      'gemini-pro'
+    ];
     
     let lastError: any = null;
+    const keyPrefix = config.geminiApiKey ? `${config.geminiApiKey.substring(0, 4)}...` : 'MISSING_KEY';
+
 
     for (const modelName of models) {
       try {
-        console.log(`[Gemini Service] Attempting ${modelName}...`);
+        console.log(`[Gemini Service] Attempting ${modelName} with key ${keyPrefix}...`);
         const genAI = new GoogleGenerativeAI(config.geminiApiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
         return await model.generateContent(contents);
@@ -40,6 +49,7 @@ export class GeminiService {
 
     throw lastError || new Error("Gemini exhausted all model combinations.");
   }
+
 
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
