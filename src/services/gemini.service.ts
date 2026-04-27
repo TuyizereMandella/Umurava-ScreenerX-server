@@ -6,38 +6,41 @@ import { supabase } from '../config/supabase';
 export class GeminiService {
   private static getModel(modelName = 'gemini-1.5-flash') {
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    // We try stable v1 first, but allow for internal fallback logic if needed
-    // The Orchestrator also handles failover between providers.
-    return genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1' });
+    // Removing explicit apiVersion to let the SDK use its default (v1)
+    // but if the user has issues, v1beta is often a good fallback.
+    return genAI.getGenerativeModel({ model: modelName });
   }
 
-  /**
-   * Internal helper to handle Gemini-specific retries with different versions
-   */
+
   private static async generateWithFallback(contents: any[]) {
-    const models = [
-      'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro', 
-      'models/gemini-1.5-flash', 'models/gemini-1.5-pro'
-    ];
-    const versions = ['v1', 'v1beta'];
+    // Standard models that are generally available. 
+    // Flash 1.5 is preferred for speed and cost, Pro 1.5 for depth.
+    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
     
     let lastError: any = null;
 
     for (const modelName of models) {
-      for (const apiVersion of versions) {
+      try {
+        console.log(`[Gemini Service] Attempting ${modelName}...`);
+        const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        return await model.generateContent(contents);
+      } catch (error: any) {
+        console.warn(`[Gemini Service] ${modelName} failed, trying v1beta:`, error.message);
         try {
-          console.log(`[Gemini Service] Attempting ${modelName} on ${apiVersion}...`);
           const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-          const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: apiVersion as any });
+          const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
           return await model.generateContent(contents);
-        } catch (error: any) {
-          console.warn(`[Gemini Service] ${modelName} on ${apiVersion} failed:`, error.message);
-          lastError = error;
+        } catch (betaError: any) {
+          console.warn(`[Gemini Service] ${modelName} on v1beta also failed:`, betaError.message);
+          lastError = betaError;
         }
       }
     }
-    throw lastError || new Error("Gemini exhausted all model/version combinations.");
+
+    throw lastError || new Error("Gemini exhausted all model combinations.");
   }
+
 
   static async analyzeResume(name: string, jobTitle: string, skills: string[], answers?: Record<string, string>, resumeUrl?: string, knockoutSkills: string[] = []) {
     if (!config.geminiApiKey) {
