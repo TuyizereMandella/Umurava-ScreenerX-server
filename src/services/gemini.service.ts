@@ -13,42 +13,31 @@ export class GeminiService {
 
 
   private static async generateWithFallback(contents: any[]) {
-    // Including -latest variants as some regions/keys require them
-    // Adding 1.0 variants as a final absolute fallback
+    // We only use the officially supported 1.5 models
     const models = [
       'gemini-1.5-flash', 
-      'gemini-1.5-flash-latest', 
-      'gemini-1.5-pro', 
-      'gemini-1.5-pro-latest',
-      'gemini-1.0-pro',
-      'gemini-pro'
+      'gemini-1.5-pro'
     ];
     
-    let lastError: any = null;
+    const errors: string[] = [];
     const keyPrefix = config.geminiApiKey ? `${config.geminiApiKey.substring(0, 4)}...` : 'MISSING_KEY';
-
 
     for (const modelName of models) {
       try {
         console.log(`[Gemini Service] Attempting ${modelName} with key ${keyPrefix}...`);
         const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+        // Using the latest stable version by default
         const model = genAI.getGenerativeModel({ model: modelName });
         return await model.generateContent(contents);
       } catch (error: any) {
-        console.warn(`[Gemini Service] ${modelName} failed, trying v1beta:`, error.message);
-        try {
-          const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-          const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
-          return await model.generateContent(contents);
-        } catch (betaError: any) {
-          console.warn(`[Gemini Service] ${modelName} on v1beta also failed:`, betaError.message);
-          lastError = betaError;
-        }
+        console.warn(`[Gemini Service] ${modelName} failed:`, error.message);
+        errors.push(`[${modelName}]: ${error.message}`);
       }
     }
 
-    throw lastError || new Error("Gemini exhausted all model combinations.");
+    throw new Error(`AI Analysis failed for all models. Errors: ${errors.join(' | ')}`);
   }
+
 
 
 
