@@ -111,7 +111,7 @@ export class GeminiService {
         : [prompt];
         
       const result = await this.generateWithFallback(contents);
-      const responseText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseText = (result.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini analyzeResume Error:', error.message || error);
@@ -149,7 +149,7 @@ export class GeminiService {
 
     try {
       const result = await this.generateWithFallback([prompt]);
-      const responseText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseText = (result.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini API Error:', error);
@@ -193,7 +193,7 @@ export class GeminiService {
 
     try {
       const result = await this.generateWithFallback([prompt]);
-      return result.text.trim();
+      return (result.text || '').trim();
     } catch (error: any) {
       console.error('Gemini API Error:', error);
       return "Market dynamics are shifting rapidly. Maintain competitive compensation to attract top talent.";
@@ -250,7 +250,7 @@ export class GeminiService {
 
     try {
       const result = await this.generateWithFallback([prompt, resumePart]);
-      const responseText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseText = (result.text || '').replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini Parse Error:', error);
