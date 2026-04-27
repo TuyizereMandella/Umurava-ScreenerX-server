@@ -87,12 +87,12 @@ export class GeminiService {
       Respond strictly in JSON format matching this schema:
       {
         "technical_dna": ["string", "string"], 
-        "algorithmic_fit_score": number, 
-        "architecture_score": number, 
+        "algorithmic_fit_score": "integer (0-100)", 
+        "architecture_score": "integer (0-100)", 
         "strengths": ["string", "string"], 
         "gaps": ["string", "string"], 
         "recommendation_summary": "string", 
-        "match_score": number,
+        "match_score": "integer (0-100)",
         "is_knocked_out": boolean, // Set to true ONLY if they are missing any of the Mandatory Knockout Skills
         "missing_knockout_skills": ["string"], // List the mandatory skills they are missing
         "experience": [
@@ -229,12 +229,12 @@ export class GeminiService {
         },
         "analysis": {
           "technical_dna": ["string", "string"], 
-          "algorithmic_fit_score": number, 
-          "architecture_score": number, 
+          "algorithmic_fit_score": "integer (0-100)", 
+          "architecture_score": "integer (0-100)", 
           "strengths": ["string", "string"], 
           "gaps": ["string", "string"], 
           "recommendation_summary": "string", 
-          "match_score": number,
+          "match_score": "integer (0-100)",
           "is_knocked_out": boolean,
           "missing_knockout_skills": ["string"],
           "experience": [

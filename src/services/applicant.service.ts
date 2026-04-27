@@ -271,8 +271,8 @@ export class ApplicantService {
     const analysisPayload = {
       applicant_id: applicantId,
       technical_dna: aiResult.technical_dna,
-      algorithmic_fit_score: aiResult.algorithmic_fit_score,
-      architecture_score: aiResult.architecture_score,
+      algorithmic_fit_score: Math.round(Number(aiResult.algorithmic_fit_score || 0)),
+      architecture_score: Math.round(Number(aiResult.architecture_score || 0)),
       strengths: aiResult.strengths,
       gaps: aiResult.gaps,
       recommendation_summary: aiResult.recommendation_summary,
@@ -291,8 +291,8 @@ export class ApplicantService {
     }
     
     // ---- Deep Multi-Factor Shortlisting Decision ----
-    const matchScore = aiResult.match_score ?? 0;
-    const fitScore = aiResult.algorithmic_fit_score ?? 0;
+    const matchScore = Math.round(Number(aiResult.match_score || 0));
+    const fitScore = Math.round(Number(aiResult.algorithmic_fit_score || 0));
     const archScore = aiResult.architecture_score ?? 0;
     const overallScore = matchScore;
     const gaps: string[] = aiResult.gaps || [];
@@ -509,8 +509,8 @@ export class ApplicantService {
     const analysisPayload = {
       applicant_id: applicant.id,
       technical_dna: analysis.technical_dna || [],
-      algorithmic_fit_score: analysis.algorithmic_fit_score || 0,
-      architecture_score: analysis.architecture_score || 0,
+      algorithmic_fit_score: Math.round(Number(analysis.algorithmic_fit_score || 0)),
+      architecture_score: Math.round(Number(analysis.architecture_score || 0)),
       strengths: analysis.strengths || [],
       gaps: analysis.gaps || [],
       recommendation_summary: analysis.recommendation_summary || 'No summary provided',
@@ -524,8 +524,8 @@ export class ApplicantService {
     }
 
     // 5. Shortlisting Logic (Respecting custom job threshold)
-    const matchScore = analysis.match_score ?? 0;
-    const fitScore = analysis.algorithmic_fit_score ?? 0;
+    const matchScore = Math.round(Number(analysis.match_score || 0));
+    const fitScore = Math.round(Number(analysis.algorithmic_fit_score || 0));
     const archScore = analysis.architecture_score ?? 0;
     const isKnockedOut = analysis.is_knocked_out === true;
     const gaps = analysis.gaps || [];
