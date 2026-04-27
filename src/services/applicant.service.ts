@@ -160,6 +160,14 @@ export class ApplicantService {
       throw new AppError(`Failed to fetch applicants: ${error.message}`, 500);
     }
 
+    if (data) {
+      data.forEach((app: any) => {
+        if (app.ai_analysis && !Array.isArray(app.ai_analysis)) {
+          app.ai_analysis = [app.ai_analysis];
+        }
+      });
+    }
+
     return data;
   }
 
@@ -268,16 +276,18 @@ export class ApplicantService {
       knockoutSkills
     });
 
+    const ensureArray = (val: any) => Array.isArray(val) ? val : (val ? [val] : []);
+
     const analysisPayload = {
       applicant_id: applicantId,
-      technical_dna: aiResult.technical_dna,
+      technical_dna: ensureArray(aiResult.technical_dna),
       algorithmic_fit_score: Math.round(Number(aiResult.algorithmic_fit_score || 0)),
       architecture_score: Math.round(Number(aiResult.architecture_score || 0)),
-      strengths: aiResult.strengths,
-      gaps: aiResult.gaps,
-      recommendation_summary: aiResult.recommendation_summary,
-      experience: aiResult.experience || [],
-      education: aiResult.education || []
+      strengths: ensureArray(aiResult.strengths),
+      gaps: ensureArray(aiResult.gaps),
+      recommendation_summary: aiResult.recommendation_summary || 'No summary provided',
+      experience: ensureArray(aiResult.experience),
+      education: ensureArray(aiResult.education)
     };
 
     const { data, error } = await supabase
@@ -505,17 +515,19 @@ export class ApplicantService {
       throw new AppError(`Failed to create applicant: ${appError.message}`, 500);
     }
 
+    const ensureArray = (val: any) => Array.isArray(val) ? val : (val ? [val] : []);
+
     // 4. Save Analysis
     const analysisPayload = {
       applicant_id: applicant.id,
-      technical_dna: analysis.technical_dna || [],
+      technical_dna: ensureArray(analysis.technical_dna),
       algorithmic_fit_score: Math.round(Number(analysis.algorithmic_fit_score || 0)),
       architecture_score: Math.round(Number(analysis.architecture_score || 0)),
-      strengths: analysis.strengths || [],
-      gaps: analysis.gaps || [],
+      strengths: ensureArray(analysis.strengths),
+      gaps: ensureArray(analysis.gaps),
       recommendation_summary: analysis.recommendation_summary || 'No summary provided',
-      experience: analysis.experience || [],
-      education: analysis.education || []
+      experience: ensureArray(analysis.experience),
+      education: ensureArray(analysis.education)
     };
 
     const { error: analysisError } = await supabase.from('ai_analysis').insert([analysisPayload]);
