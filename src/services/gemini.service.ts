@@ -1,34 +1,33 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { config } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { supabase } from '../config/supabase';
 
 export class GeminiService {
-  private static getModel(modelName = 'gemini-1.5-flash') {
-    const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    // Removing explicit apiVersion to let the SDK use its default (v1)
-    // but if the user has issues, v1beta is often a good fallback.
-    return genAI.getGenerativeModel({ model: modelName });
-  }
+
 
 
   private static async generateWithFallback(contents: any[]) {
-    // We only use the officially supported 1.5 models
+    // We only use the officially supported 2.5 models from the new SDK
     const models = [
-      'gemini-1.5-flash', 
-      'gemini-1.5-pro'
+      'gemini-2.5-flash', 
+      'gemini-2.0-flash',
+      'gemini-2.5-pro'
     ];
     
     const errors: string[] = [];
     const keyPrefix = config.geminiApiKey ? `${config.geminiApiKey.substring(0, 4)}...` : 'MISSING_KEY';
 
+    const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+
     for (const modelName of models) {
       try {
         console.log(`[Gemini Service] Attempting ${modelName} with key ${keyPrefix}...`);
-        const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-        // Using the latest stable version by default
-        const model = genAI.getGenerativeModel({ model: modelName });
-        return await model.generateContent(contents);
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: contents
+        });
+        return response;
       } catch (error: any) {
         console.warn(`[Gemini Service] ${modelName} failed:`, error.message);
         errors.push(`[${modelName}]: ${error.message}`);
@@ -45,7 +44,6 @@ export class GeminiService {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
-    const model = this.getModel();
     
     let resumePart: any = null;
     if (resumeUrl) {
@@ -113,7 +111,7 @@ export class GeminiService {
         : [prompt];
         
       const result = await this.generateWithFallback(contents);
-      const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini analyzeResume Error:', error.message || error);
@@ -125,7 +123,6 @@ export class GeminiService {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
-    const model = this.getModel();
     
     const prompt = `
       You are ScreenerX, an expert AI recruitment strategist.
@@ -152,7 +149,7 @@ export class GeminiService {
 
     try {
       const result = await this.generateWithFallback([prompt]);
-      const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini API Error:', error);
@@ -183,7 +180,6 @@ export class GeminiService {
     if (!config.geminiApiKey) {
       return "Ensure your GEMINI_API_KEY is set in production to receive personalized insights.";
     }
-    const model = this.getModel();
     
     const prompt = `
       You are ScreenerX, an expert AI recruitment advisor.
@@ -197,7 +193,7 @@ export class GeminiService {
 
     try {
       const result = await this.generateWithFallback([prompt]);
-      return result.response.text().trim();
+      return result.text.trim();
     } catch (error: any) {
       console.error('Gemini API Error:', error);
       return "Market dynamics are shifting rapidly. Maintain competitive compensation to attract top talent.";
@@ -208,7 +204,6 @@ export class GeminiService {
     if (!config.geminiApiKey) {
       throw new AppError('Gemini API key is not configured', 500);
     }
-    const model = this.getModel();
 
     const resumePart = {
       inlineData: {
@@ -255,7 +250,7 @@ export class GeminiService {
 
     try {
       const result = await this.generateWithFallback([prompt, resumePart]);
-      const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(responseText);
     } catch (error: any) {
       console.error('Gemini Parse Error:', error);
